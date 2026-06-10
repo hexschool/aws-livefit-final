@@ -34,6 +34,10 @@ docker compose up -d
 
 **成功長什麼樣**：`docker compose ps` 三個服務都在跑；打開 localhost:3000 看到健身房首頁。
 
+整週開發期的系統環境長這樣（注意：**你的後端在 Docker 外面**，跑在本機）：
+
+![開發環境圖](docs/images/dev-environment.png)
+
 ### Step 3：建立你的後端
 
 ```bash
@@ -113,6 +117,10 @@ npm install              # 先裝驗收測試需要的工具
 （規則寫在 compose 檔的註解裡：服務叫 `backend`、對外開 8080、要有 healthcheck）。
 CI 會用你的 compose 起整包、跑 smoke、然後**重啟你的容器確認資料還在**
 （所以資料一定要真的存進 PostgreSQL，放在程式記憶體裡過不了這關）。
+
+容器化完成後的系統環境（對照上面開發期的圖：你的後端搬進圈內，`DB_HOST` 跟著變）：
+
+![容器化後環境圖](docs/images/dockerized.png)
 
 ---
 
