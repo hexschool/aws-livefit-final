@@ -132,4 +132,4 @@ jobs:
 
       - name: 失敗 → 印出容器 logs
         if: failure()
-        run: docker compose logs backend postgres
+        run: docker compose logs backend postgres || true
