@@ -44,8 +44,9 @@ npm install              # 先裝驗收測試需要的工具
 接下來就是你的世界：在這個 repo 裡蓋你的後端（資料夾結構自己決定），
 需要什麼套件自己 `npm install`。完成後記得遵守下面的四條公約。
 
-**成功長什麼樣**：`npm run dev`（或你自己的指令）起來後，
-打開 http://localhost:8081 對 `GET /healthcheck` 按 Try it out → 回 200。
+**成功長什麼樣**：你的 server 起來後（腳手架沒附 dev script，自己加一個，
+例如 `"dev": "nodemon bin/www.js"`），打開 http://localhost:8081
+對 `GET /healthcheck` 按 Try it out → 回 200。
 
 ### Step 4：開發迴圈（每支 API 都這樣走）
 
@@ -122,8 +123,8 @@ CI 會用你的 compose 起整包、跑 smoke、然後**重啟你的容器確認
 3. 把 README 最上面 badge 連結裡的帳號/repo 改成你自己的
 4. **繳交：你的 repo 網址 + 一張前端跑起來的截圖**（任何一頁有真資料的畫面）
 
-> 📏 **考卷規則**：`test/` 資料夾與 `.github/workflows/` 是考卷，**不可修改**。
-> 評分時會用原版測試抽查重跑，改考卷以 0 分計。
+> 📏 **考卷規則**：`test/` 與 `.github/` 兩個資料夾是考卷，**不可修改**。
+> 評分時會用原版測試抽查重跑，改考卷以 0 分計。（`frontend/` 與 `docs/` 也請不要動。）
 
 ---
 
@@ -136,7 +137,7 @@ CI 會用你的 compose 起整包、跑 smoke、然後**重啟你的容器確認
 三步：① 看哪個 step 紅 — 「啟動你的後端」紅 = server 沒起來或 healthcheck 沒回 200，往下看 server.log 的錯誤訊息（通常是環境變數沒讀到）；② 「跑測試」紅 = 點開看哪個測試名稱失敗，測試名稱就是行為描述；③ 回本機 `npm run test:m{N}` 重現它。
 
 **Q3：本機測試紅、但 CI 是綠的（或相反）？**
-你本機的資料庫累積了很多測試資料，CI 每次都是全新的。先 `npm run db:reset`（會清空本機資料庫重來）再跑一次。
+你本機的資料庫累積了很多測試資料，CI 每次都是全新的。先 `npm run db:reset`（會清空本機資料庫重來）再跑一次。做完壓軸後注意：`db:reset` 會連你的 backend 容器一起起來佔住 8080，本機開發時先 `docker compose stop backend`。
 
 **Q4：測試裡的中文名字是什麼？**
 測試名稱描述「行為合約」，紅燈時讀測試名 → 去 Swagger 對應章節看規格 → 用 Try it out 手動重打一次，三步就能定位問題。
@@ -145,4 +146,4 @@ CI 會用你的 compose 起整包、跑 smoke、然後**重啟你的容器確認
 都可以。資料庫怎麼操作是你的事，驗收只看 HTTP 行為。課堂教過的工具都夠用。
 
 **Q6：`npm install` 之後 test 跑不動？**
-測試需要你的 server 先跑著（`npm run dev` 或你的指令），它是從外面打 HTTP 進來的。
+測試需要你的 server 先跑著，它是從外面打 HTTP 進來的。腳手架沒附 dev script——自己加一個（例如 `"dev": "nodemon bin/www.js"`）。

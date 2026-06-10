@@ -86,7 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: docker compose 起你的後端 + 資料庫（backend 服務，公約⑤）
+      - name: docker compose 起你的後端 + 資料庫（backend 服務，壓軸規則）
         run: |
           docker compose up -d --build backend postgres
           echo "等待 backend 容器就緒"
