@@ -41,9 +41,9 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -68,7 +68,11 @@ jobs:
           exit 1
 
       - name: 跑 ${{ matrix.milestone }} 合約測試
-        run: npx jest test/${{ matrix.milestone }}.test.js --runInBand
+        run: npx jest test/${{ matrix.milestone }}.test.js --runInBand --json --outputFile=jest-result.json
+
+      - name: 📊 驗收結果總表（看這裡就知道哪些對哪些沒對）
+        if: always()
+        run: node .github/scripts/summary.js "驗收 (${{ matrix.milestone }})" jest-result.json
 
       - name: 測試失敗 → 印出 server log 幫你 debug
         if: failure()
@@ -97,7 +101,7 @@ jobs:
           docker compose logs backend
           exit 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -107,7 +111,11 @@ jobs:
         run: npm install
 
       - name: smoke 測試（容器裡的後端要跟本機開發時行為一致）
-        run: npx jest test/smoke.test.js --runInBand
+        run: npx jest test/smoke.test.js --runInBand --json --outputFile=jest-result.json
+
+      - name: 📊 smoke 結果總表
+        if: always()
+        run: node .github/scripts/summary.js "壓軸 smoke（容器化）" jest-result.json
 
       - name: 持久化檢查（資料要存在 PostgreSQL，重啟不能消失）
         run: |
@@ -125,8 +133,10 @@ jobs:
           echo "重啟後資料還在嗎？"
           if curl -sf "http://localhost:8080/api/coaches/skill" | grep -q "$MARK"; then
             echo "✅ 資料活過了重啟 — 你真的有用資料庫"
+            echo "| ✅ | 持久化檢查：重啟容器後資料還在（資料真的存進 PostgreSQL） |" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "❌ 重啟後資料不見了 — 資料必須存進 PostgreSQL，不能放在程式記憶體裡"
+            echo "| ❌ | 持久化檢查：重啟容器後資料不見了 — 資料必須存進 PostgreSQL，不能放在程式記憶體裡 |" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
