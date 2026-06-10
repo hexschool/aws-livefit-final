@@ -93,11 +93,11 @@ backend/              # 你自己寫的後端，跑在 localhost:8080
 
 ---
 
-## ⚠️ 地雷總表（先讀，省你好幾個小時）
+## ⚠️ 容易踩雷的規則（先讀，省你好幾個小時）
 
-### 1. 四句逐字訊息合約（最重要）
+### 1. 四句固定錯誤訊息文字（最重要）
 
-報名課程（`POST /api/courses/:courseId`）的錯誤訊息被前端拿去**逐字比對**來決定開哪個視窗。
+報名課程（`POST /api/courses/:courseId`）失敗時，前端會拿錯誤訊息文字來判斷要開哪個提示視窗。
 **改一個字、多一個空格，使用者按下報名鈕就會「沒反應」**：
 
 - `已經報名過此課程`
@@ -119,19 +119,19 @@ backend/              # 你自己寫的後端，跑在 localhost:8080
 
 ---
 
-## 🏁 里程碑（= GitHub Actions 的 jobs = 你的進度條）
+## 🏁 里程碑（= GitHub Actions 的 job = 你的進度條）
 
 | 里程碑 | 內容 | 本機驗證 | 前端活過來的頁面 |
 |---|---|---|---|
 | M1 | 種資料：技能 + 方案 CRUD | `npm run test:m1` | 健身方案列表 |
 | M2 | 會員：註冊/登入/JWT/個資 | `npm run test:m2` | 註冊、登入、會員中心 |
 | M3 | 教練後台：升級教練/開課/改課 | `npm run test:m3` | 教練個人後台、課程管理 |
-| M4 | 公開瀏覽:教練列表/詳情/課表 | `npm run test:m4` | 教練列表、教練詳情 |
-| M5 | 購買與報名（地雷王） | `npm run test:m5` | 購買方案、報名課程、我的課表 |
+| M4 | 公開瀏覽：教練列表/詳情/課表 | `npm run test:m4` | 教練列表、教練詳情 |
+| M5 | 購買與報名（最容易踩雷） | `npm run test:m5` | 購買方案、報名課程、我的課表 |
 | M6 | 月營收統計 ⭐ 挑戰 | `npm run test:m6` | 教練營收報表 |
-| 壓軸 | 容器化:你的後端進 Docker | `docker compose up -d --build backend postgres` 後跑 `npm run test:smoke` | — |
+| 壓軸 | 容器化：你的後端進 Docker | `docker compose up -d --build backend postgres` 後跑 `npm run test:smoke` | — |
 
-**通過標準**：GitHub Actions **七顆 jobs 全數綠燈**（66 條合約測試 + 容器化壓軸），缺一不可。
+**通過標準**：GitHub Actions **七個 job 全數綠燈**（66 條驗收測試 + 容器化壓軸），缺一不可。
 
 **壓軸（W10 容器化挑戰）**：本機 M1~M6 都過之後，把外面的 `backend/` 搬進本 repo，變成 `node-js-final-2026/backend/`。只要準備 push / 繳交，就必須先完成這個搬進 repo 的動作。接著幫你的後端寫 Dockerfile、加進 `docker-compose.yml`
 （規則寫在 compose 檔的註解裡：服務叫 `backend`、build `./backend`、對外開 8080、要有 healthcheck）。
@@ -154,7 +154,7 @@ npm run test:smoke
 ## 📮 繳交方式
 
 1. 全部做完並確認 `backend/` 已搬進本 repo，再 push 上 GitHub
-2. 確認 Actions 的 jobs 狀態（哪幾顆綠 = 你完成了哪些里程碑）
+2. 確認 Actions 的 job 狀態（哪些 job 綠 = 你完成了哪些里程碑）
 3. 把 README 最上面 badge 連結裡的帳號/repo 改成你自己的
 4. **繳交：你的 repo 網址 + 一張前端跑起來的截圖**（任何一頁有真資料的畫面）
 
@@ -174,8 +174,8 @@ npm run test:smoke
 **Q3：本機測試紅、但 CI 是綠的（或相反）？**
 你本機的資料庫累積了很多測試資料，CI 每次都是全新的。先在作業包跑 `npm run db:reset`（會清空本機資料庫重來）再跑一次。做完壓軸後注意：`db:reset` 會連你搬進 compose 的 backend 容器一起起來佔住 8080；本機開發外部 `../backend/` 時，先 `docker compose stop backend`。
 
-**Q4：測試裡的中文名字是什麼？**
-測試名稱描述「行為合約」，紅燈時讀測試名 → 去 Swagger 對應章節看規格 → 用 Try it out 手動重打一次，三步就能定位問題。
+**Q4：測試名稱的中文描述是在說什麼？**
+測試名稱描述「行為規格」，紅燈時讀測試名 → 去 Swagger 對應章節看規格 → 用 Try it out 手動重打一次，三步就能定位問題。
 
 **Q5：可以用 TypeORM 嗎？可以不用嗎？**
 都可以。資料庫怎麼操作是你的事，驗收只看 HTTP 行為。課堂教過的工具都夠用。
