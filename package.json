@@ -2,9 +2,9 @@
   "name": "fitness-backend-final",
   "version": "1.0.0",
   "private": true,
-  "description": "健身房後端 API — 最終作業。前端是成品，後端由你打造。",
+  "description": "健身房後端 API — 最終作業驗收包。前端、Swagger、測試都在這裡，後端最後搬進 backend/。",
   "scripts": {
-    "start": "node ./bin/www.js",
+    "start": "node .github/scripts/check-backend.js && npm --prefix backend start",
     "test": "jest --runInBand",
     "test:m1": "jest test/m1.test.js --runInBand",
     "test:m2": "jest test/m2.test.js --runInBand",
@@ -21,25 +21,7 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "supertest": "^7.0.0"
-  },
-  "dependencies": {
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^2.4.3",
-    "cookie-parser": "^1.4.6",
-    "cors": "^2.8.5",
-    "dayjs": "^1.11.13",
-    "dotenv": "^16.4.5",
-    "express": "^4.18.2",
-    "formidable": "^3.5.2",
-    "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "pg": "^8.13.1",
-    "pino": "^9.6.0",
-    "pino-http": "^10.3.0",
-    "pino-pretty": "^13.0.0",
-    "reflect-metadata": "^0.2.1",
-    "typeorm": "^0.3.20"
+    "supertest": "^7.0.0"
   }
 }

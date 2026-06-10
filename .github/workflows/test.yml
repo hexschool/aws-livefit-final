@@ -52,7 +52,13 @@ jobs:
       - name: 安裝依賴
         run: npm install
 
-      - name: 啟動你的後端（npm start，公約①）
+      - name: 檢查 backend/ 已搬進 repo（正式繳交必備）
+        run: node .github/scripts/check-backend.js
+
+      - name: 安裝後端依賴
+        run: npm --prefix backend install
+
+      - name: 啟動你的後端（根目錄 npm start 會代理到 backend/start，公約①）
         run: |
           npm start > server.log 2>&1 &
           echo "等待 server 就緒（公約④：GET /healthcheck 要在資料庫可用後回 200）"

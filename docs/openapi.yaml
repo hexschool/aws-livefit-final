@@ -76,7 +76,7 @@ paths:
           ⚠️ 三個地雷一次講清楚：
           1. 回應是**純文字 `OK`**，不是 JSON——這是全文件唯一不套 `{ status, data }` 包裝的端點，不要手癢包起來。
           2. 路徑是 `/healthcheck`，**不在 `/api` 底下**。
-          3. 公約④＋第 10 週 docker-compose 都靠它：backend 容器的 healthcheck 會打這支，前端容器要等它回 200 才會啟動。沒做這支，`docker compose up` 時前端永遠起不來，而且錯誤訊息不會直接告訴你原因。
+          3. 公約④＋第 10 週 docker-compose 都靠它：CI 和 backend 容器的 healthcheck 會打這支，確認你的 server 已啟動且資料庫可用。沒做這支，GitHub Actions 會卡在等待後端就緒，容器化驗收也會失敗。
         responses:
           '200':
             description: 服務正常運作（這支沒有可預期的失敗回應；打不通就代表服務沒起來）
@@ -92,7 +92,7 @@ paths:
       summary: 取得教練技能列表
       description: |-
         回傳全部技能，不需登入。前端有三個地方共用這支：管理者的技能管理頁、教練個人資料頁、開課表單的技能下拉選單。
-        ⚠️ 路由順序地雷：這條路徑必須排在 `/api/coaches/{coachId}`（教練詳情）**之前**。兩條路徑長得都像「/api/coaches/後面接一段文字」，如果教練詳情那條先註冊，`skill` 這個字會被當成 coachId 吃掉——這支 API 就永遠打不到，而且因為 `skill` 不是合法的 uuid，還會炸出 500。掛路由時請把這條放前面。
+        ⚠️ 路由順序地雷：這條路徑必須排在 `/api/coaches/{coachId}`（教練詳情）**之前**。兩條路徑長得都像「/api/coaches/後面接一段文字」，如果教練詳情那條先註冊，`skill` 這個字會被當成 coachId 吃掉——這支 API 就永遠打不到。掛路由時請把這條放前面。
       responses:
         '200':
           description: 成功取得技能列表（還沒有任何技能時回空陣列 `[]`，不是錯誤）
@@ -194,7 +194,7 @@ paths:
       description: |-
         依 id 刪除一筆技能，不需登入（同樣是課程簡化的管理端點）。
         成功回應的 `data` 內容不列入驗收——答案版回一個刪除結果物件（見範例），你回 `null` 也可以，驗收只看 2xx ＋ `status: "success"`。
-        ⚠️ skillId 必須是合法的 uuid 字串：格式正確但查無資料 → 400「ID錯誤」；**根本不是 uuid 格式**（例如隨便打 `abc`）→ 會變成 500 伺服器錯誤。500 不在驗收範圍，但測試時請拿真實存在的 uuid 來打，不要拿亂碼嚇自己。
+        ⚠️ skillId 必須是合法的 uuid 字串：格式正確但查無資料 → 400「ID錯誤」；**根本不是 uuid 格式**（例如隨便打 `abc`）不列入驗收，建議你回 400 failed，不要讓它變成 500。
       parameters:
         - name: skillId
           in: path
@@ -220,13 +220,6 @@ paths:
               example:
                 status: failed
                 message: "ID錯誤"
-        '500':
-          description: 觸發條件：skillId 不是合法的 uuid 格式（參考行為，不在驗收範圍）
-          content:
-            application/json:
-              example:
-                status: error
-                message: "伺服器錯誤"
   /api/credit-package:
     get:
       tags:
@@ -427,7 +420,7 @@ paths:
       description: |-
         依 id 刪除一筆方案，不需登入（課程簡化的管理端點，前端頁面沒有呼叫它）。
         成功回應的 `data` 內容不列入驗收——答案版回一個刪除結果物件（見範例），你回 `null` 也可以，驗收只看 2xx ＋ `status: "success"`。
-        ⚠️ creditPackageId 必須是合法的 uuid 字串：格式正確但查無資料 → 400「ID錯誤」；**不是 uuid 格式** → 500 伺服器錯誤（參考行為，不在驗收範圍）。
+        ⚠️ creditPackageId 必須是合法的 uuid 字串：格式正確但查無資料 → 400「ID錯誤」；**不是 uuid 格式**不列入驗收，建議你回 400 failed，不要讓它變成 500。
       parameters:
         - name: creditPackageId
           in: path
@@ -453,13 +446,6 @@ paths:
               example:
                 status: failed
                 message: "ID錯誤"
-        '500':
-          description: 觸發條件：creditPackageId 不是合法的 uuid 格式（參考行為，不在驗收範圍）
-          content:
-            application/json:
-              example:
-                status: error
-                message: "伺服器錯誤"
   # ===== g2-users =====
   /api/users/signup:
       post:
@@ -2360,7 +2346,7 @@ paths:
         ⚠️ 地雷三：路徑上的 {coachId} 是列表回的「教練 id」，不是 user_id。拿 user_id 來查會查不到，回「找不到該教練」。
 
         補充：role 在這支查得到的教練身上固定是 COACH；profile_image_url 可能是 null（教練沒放頭像）。
-        傳入非 uuid 格式的亂字串（例如 abc123）會炸成 5xx 伺服器錯誤——這不在驗收範圍，自己測的時候別被嚇到。
+        傳入非 uuid 格式的亂字串（例如 abc123）不列入驗收；建議回 400 failed，不要讓它變成 500。
         狀態碼尺度：驗收只看「2xx／4xx」加上 body 的 `status` 欄位，實際數字供參考。
       parameters:
         - name: coachId
