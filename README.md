@@ -1,7 +1,5 @@
 # 最終作業：健身房後端 API — 把這個產品救活
 
-![驗收狀態](https://github.com/你的帳號/你的repo/actions/workflows/test.yml/badge.svg)
-
 > 你拿到一個**完整的健身房網站前端**（會員、教練、課程、購買方案，全部做好了）
 > 和一本**API 規格書**（Swagger）。
 > 唯一的問題：它的後端不存在。
@@ -36,7 +34,16 @@ docker compose up -d
 
 整週開發期的系統環境長這樣：這個 repo 是**作業包**，負責前端、Swagger、PostgreSQL 和測試；你的後端先放在作業包旁邊的 `../backend/`，跑在本機 `localhost:8080`。
 
-![開發環境圖](docs/images/dev-environment.png)
+```txt
+node-js-final-2026/        # 作業包：前端、Swagger、PostgreSQL、測試
+├── frontend/              # http://localhost:3000
+├── docs/                  # Swagger UI: http://localhost:8081
+├── test/                  # npm run test:m1 ~ test:m6
+└── docker-compose.yml     # 啟動前端、Swagger、PostgreSQL
+
+../backend/                # 你自己寫的後端，開發期先放在作業包外面
+└── server.js              # http://localhost:8080
+```
 
 ### Step 3：建立你的外部後端
 
@@ -145,9 +152,18 @@ docker compose up -d --build backend postgres
 npm run test:smoke
 ```
 
-容器化完成後的系統環境（對照上面開發期的圖：外部 `backend/` 被搬進本 repo，變成 Docker 裡的 `backend` service，`DB_HOST` 跟著變成 `postgres`）：
+容器化完成後，外部 `backend/` 會被搬進本 repo，變成 Docker 裡的 `backend` service，`DB_HOST` 跟著改成 `postgres`：
 
-![容器化後環境圖](docs/images/dockerized.png)
+```txt
+node-js-final-2026/
+├── backend/               # 你的後端，正式繳交前搬進來
+│   ├── package.json       # 要有 scripts.start
+│   └── Dockerfile         # 壓軸任務要補
+├── frontend/
+├── docs/
+├── test/
+└── docker-compose.yml     # 要加上 backend service
+```
 
 ---
 
@@ -155,8 +171,7 @@ npm run test:smoke
 
 1. 全部做完並確認 `backend/` 已搬進本 repo，再 push 上 GitHub
 2. 確認 Actions 的 job 狀態（哪些 job 綠 = 你完成了哪些里程碑）
-3. 把 README 最上面 badge 連結裡的帳號/repo 改成你自己的
-4. **繳交：你的 repo 網址 + 一張前端跑起來的截圖**（任何一頁有真資料的畫面）
+3. **繳交：你的 repo 網址 + 一張前端跑起來的截圖**（任何一頁有真資料的畫面）
 
 > 📏 **考卷規則**：`test/`、`.github/`、根目錄 `package.json` / `package-lock.json` 是驗收包，**不可修改**。
 > 評分時會用原版測試抽查重跑，改考卷以 0 分計。（你的後端依賴請裝在 `backend/package.json`；`frontend/` 與 `docs/` 也請不要動。）
