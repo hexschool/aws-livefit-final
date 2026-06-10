@@ -106,7 +106,7 @@ npm install              # 先裝驗收測試需要的工具
 | M6 | 月營收統計 ⭐ 挑戰 | `npm run test:m6` | 教練營收報表 |
 | 壓軸 | 容器化:你的後端進 Docker | `npm run test:smoke` | — |
 
-**及格與評分**：〔由老師公布 — 占位〕
+**通過標準**：GitHub Actions **七顆 jobs 全數綠燈**（66 條合約測試 + 容器化壓軸），缺一不可。
 
 **壓軸（W10 容器化挑戰）**：幫你的後端寫 Dockerfile、加進 `docker-compose.yml`
 （規則寫在 compose 檔的註解裡：服務叫 `backend`、對外開 8080、要有 healthcheck）。
