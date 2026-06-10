@@ -131,7 +131,7 @@ CI 會用你的 compose 起整包、跑 smoke、然後**重啟你的容器確認
 ## ❓ FAQ
 
 **Q1：前端打 API 一直被擋（CORS 錯誤）？**
-前端在 3000、你的後端在 8080，瀏覽器會擋跨來源請求。這就是 W3 教過的 `cors` 上場的時刻 — 想想那行 `app.use(cors())` 是幹嘛的。
+前端在 3000、你的後端在 8080，瀏覽器會擋跨來源請求。這就是 W3 教過的 `cors` 上場的時刻 — 想想那行 `app.use(cors())` 是幹嘛的。（Swagger 的 Try it out 從 8081 打過來顯示 `Failed to fetch` 也是同一件事——這行加了，前端跟 Swagger 同時通。）
 
 **Q2：Actions 紅燈了，怎麼讀？**
 三步：① 看哪個 step 紅 — 「啟動你的後端」紅 = server 沒起來或 healthcheck 沒回 200，往下看 server.log 的錯誤訊息（通常是環境變數沒讀到）；② 「跑測試」紅 = 點開看哪個測試名稱失敗，測試名稱就是行為描述；③ 回本機 `npm run test:m{N}` 重現它。
