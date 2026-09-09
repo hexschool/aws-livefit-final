@@ -317,3 +317,12 @@
 - 本機課程瀏覽器：開啟第 13 單元學生任務，確認自查指令、克庭驗收入口存在，沒有 W12 監控交件要求；未發布課程網站。
 - GitHub CLI：推送 1e492c9，讀回私密設定與 CI，checker／合約／AWS 模擬測試均 success。
 - 最終報告產生本機 HTML 預覽，個人設定與原始報告不進 Git；原監控初版記錄保留作歷史，本段與最新 validation 記錄為目前範圍。
+
+
+### B041｜2026-09-09 12:25（台北）｜只輸入網址的學生自查
+- 使用者以截圖指出必填資源表太繁瑣；修正原先誤以為是繳交清單的理解，改自查輸入介面，未重寫學生繳交要求。
+- CloudShell：Actions → Upload file，上傳只有 check-final.js／discover-final.js 的壓縮包；新建 livefit-url-check 目錄，只以 HTTPS 網址執行，沒有讀舊 teacher.local.json。
+- 第一輪實機找出 CLI module.exports 尚未設定就載入辨識模組的循環匯入問題，已修正並加入真正 CLI 子程序回歸測試。同名包第二次上傳被 CloudShell 拒絕覆蓋；改用 livefit-url-check-v2.tar.gz，讀回上傳成功後再解壓執行。
+- 最後自動辨識沒有待確認欄位，不需手填或選擇；25 PASS／0 FAIL／0 BLOCKED／8 MANUAL。全程唯讀 AWS／網站，未改 Role、未新增監控或測試會員、未寄信／重啟。
+- 原始報告透過可見 CloudShell 終端分段讀回，保存 JSON 與本機 HTML；比對兩個程式的 SHA-256。沒有匯出 AWS credentials 或自動產生的資源設定。
+- 本機課程瀏覽器重新載入學生任務，已顯示 npm run check:final -- https://你的網站，舊必填 JSON 步驟不再出現。

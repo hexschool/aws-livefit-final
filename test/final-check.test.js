@@ -1,5 +1,6 @@
 const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, exitCode, renderHtml, parseArgs, scrub, READS } = require('../scripts/check-final')
 const { runFlow } = require('../scripts/check-flow')
+const { discover, roleResources, validateUrl } = require('../scripts/discover-final')
 const c = { url: 'https://class.example.com', region: 'ap-northeast-1', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
 const rule = (port, ip) => ({ IpProtocol: 'tcp', FromPort: port, ToPort: port, IpRanges: [{ CidrIp: ip }] })
 const web = [{ GroupId: 'sg-web', IpPermissions: [rule(22, c.sshCidr), rule(80, '0.0.0.0/0'), rule(443, '0.0.0.0/0')] }]
@@ -124,4 +125,99 @@ test('本版最終作業不呼叫 CloudWatch 或 SNS，不要求監控欄位', a
     throw Object.assign(new Error(), { code: 'AccessDenied', status: 'BLOCKED' })
   }, request: async () => ({ status: 503, headers: {}, text: '' }) })
   expect(report.checks.some(x => x.week === 'W12' || x.id.startsWith('monitor.'))).toBe(false)
+})
+
+test('學生只填 HTTPS 網址；保留老師設定模式，不接受兩個來源', () => {
+  expect(parseArgs([c.url])).toEqual({ url: c.url })
+  expect(validateUrl(c.url + '/')).toBe(c.url)
+  expect(() => parseArgs([c.url, '--config', 'x.json'])).toThrow()
+  for (const url of ['https://user:password@example.com', 'https://example.com/?secret=x', 'https://example.com/ready', 'http://example.com']) expect(() => validateUrl(url)).toThrow()
+})
+test('真正 CLI 載入自動辨識模組，無循環匯入警告，錯誤網址不呼叫 AWS', () => {
+  const result = require('node:child_process').spawnSync(process.execPath, [require.resolve('../scripts/check-final'), 'https://example.com/ready'], { encoding: 'utf8' })
+  expect(result.status).toBe(2)
+  expect(result.stderr).toContain('請只填自己的 HTTPS 網站根網址')
+  expect(result.stderr).not.toMatch(/circular dependency|not a function/)
+})
+const account = '123456789012'
+const policy = { Statement: [
+  { Effect: 'Allow', Action: 'ecr:GetAuthorizationToken', Resource: '*' },
+  { Effect: 'Allow', Action: ['s3:ListBucket', 's3:GetObject'], Resource: ['arn:aws:s3:::class-private-photos', 'arn:aws:s3:::class-private-photos/coaches/*'] },
+  { Effect: 'Allow', Action: 'ecr:BatchGetImage', Resource: `arn:aws:ecr:ap-northeast-1:${account}:repository/class-app` },
+  { Effect: 'Allow', Action: 'ses:SendEmail', Resource: `arn:aws:ses:ap-northeast-1:${account}:identity/student@example.com` }
+] }
+function discoveryAws (overrides = {}) {
+  const data = {
+    'get-caller-identity': { Account: account },
+    'describe-instances': { Reservations: [{ Instances: [{ InstanceId: c.instanceId, PublicIpAddress: '203.0.113.10', VpcId: 'vpc-class', SecurityGroups: [{ GroupId: 'sg-web' }], IamInstanceProfile: { Arn: `arn:aws:iam::${account}:instance-profile/runtime` } }] }] },
+    'get-instance-profile': { InstanceProfile: { Roles: [{ RoleName: 'runtime' }] } },
+    'list-role-policies': { PolicyNames: ['runtime-access'] },
+    'get-role-policy': { PolicyDocument: encodeURIComponent(JSON.stringify(policy)) },
+    'list-attached-role-policies': { AttachedPolicies: [] },
+    'describe-db-instances': { DBInstances: [
+      { DBInstanceIdentifier: 'unrelated-db', DBSubnetGroup: { VpcId: 'vpc-other' } },
+      { DBInstanceIdentifier: c.dbInstanceIdentifier, DBSubnetGroup: { VpcId: 'vpc-class' } }
+    ] },
+    'describe-budgets': { Budgets: [{ BudgetName: c.budgetName, BudgetType: 'COST', BudgetLimit: { Amount: '999' } }] },
+    'list-object-versions': { Versions: [{ Key: c.practiceKey, VersionId: 'v1' }] },
+    'describe-images': { imageDetails: [{ imageTags: ['v1'], imageDigest: 'sha256:' + 'a'.repeat(64) }] },
+    'describe-security-groups': { SecurityGroups: web },
+    ...overrides
+  }
+  return jest.fn(async (service, operation, input) => {
+    expect(READS.has(`${service}/${operation}`)).toBe(true)
+    if (!(operation in data)) throw Object.assign(new Error(), { code: 'AccessDenied', status: 'BLOCKED' })
+    const result = data[operation]
+    if (result instanceof Error) throw result
+    return result
+  })
+}
+test('只靠網址找到對應 EC2 與專用資源；不依通過標準挑預算或物件', async () => {
+  const aws = discoveryAws(); const choose = jest.fn()
+  const result = await discover(c.url, { aws, resolve4: async () => ['203.0.113.10'], choose })
+  expect(result.issues).toEqual({})
+  expect(result.config).toMatchObject(c)
+  expect(choose).not.toHaveBeenCalled()
+  expect(aws.mock.calls.find(([, op]) => op === 'describe-instances')[2]).toEqual({ Filters: [{ Name: 'ip-address', Values: ['203.0.113.10'] }] })
+  expect(result.config.budgetName).toBe(c.budgetName) // Amount 999 is still discovered so the check can FAIL.
+  expect(result.config.practiceKey).toBe(c.practiceKey) // A single version is not hidden by discovery.
+})
+test('多個同 VPC 資料庫必須選擇，未選擇不取第一筆', async () => {
+  const aws = discoveryAws({ 'describe-db-instances': { DBInstances: ['db-b', 'db-a'].map(DBInstanceIdentifier => ({ DBInstanceIdentifier, DBSubnetGroup: { VpcId: 'vpc-class' } })) } })
+  const pending = await discover(c.url, { aws, resolve4: async () => ['203.0.113.10'] })
+  expect(pending.config.dbInstanceIdentifier).toBeUndefined()
+  expect(pending.issues.dbInstanceIdentifier).toContain('2 個候選')
+  const selected = await discover(c.url, { aws, resolve4: async () => ['203.0.113.10'], choose: async (name, labels) => {
+    expect(labels).toEqual(['db-a', 'db-b']); return 1
+  } })
+  expect(selected.config.dbInstanceIdentifier).toBe('db-b')
+})
+test('萬用權限、Deny、其他帳號／區域不能用來認定唯一網站資源', () => {
+  expect(roleResources([policy], 'ecr', c.region, account)).toEqual([c.repository])
+  expect(roleResources([{ Statement: [{ Effect: 'Deny', Action: 's3:*', Resource: 'arn:aws:s3:::wrong' }] }], 's3', c.region, account)).toEqual([])
+  expect(roleResources([policy], 'ecr', 'us-east-1', account)).toEqual([])
+  expect(roleResources([policy], 'ses', c.region, '999999999999')).toEqual([])
+  expect(() => roleResources([{ Statement: [{ Effect: 'Allow', Action: 's3:*', Resource: '*' }] }], 's3', c.region, account)).toThrow('萬用')
+})
+test('多個 DNS IP 不向 AWS 任意查第一台，關聯資源列無法確認', async () => {
+  const aws = discoveryAws()
+  const result = await discover(c.url, { aws, resolve4: async () => ['203.0.113.10', '203.0.113.11'] })
+  expect(result.config.instanceId).toBeUndefined()
+  expect(aws.mock.calls.some(([, op]) => op === 'describe-instances')).toBe(false)
+  expect(result.issues.instanceId).toContain('多個 DNS')
+})
+test('Role 查詢被拒絕仍找 RDS，但不掃整個帳號猜 Bucket', async () => {
+  const aws = discoveryAws({ 'get-role-policy': Object.assign(new Error(), { code: 'AccessDenied' }) })
+  const result = await discover(c.url, { aws, resolve4: async () => ['203.0.113.10'] })
+  expect(result.config.dbInstanceIdentifier).toBe(c.dbInstanceIdentifier)
+  expect(result.config.bucket).toBeUndefined()
+  expect(result.issues.bucket).toContain('AccessDenied')
+  expect(aws.mock.calls.some(([s, op]) => s === 's3api' || op === 'list-buckets')).toBe(false)
+})
+test('未辨識資源不發無範圍查詢，SSH 自動模式不宣稱來源就是自己電腦', async () => {
+  const aws = jest.fn(async () => { throw Object.assign(new Error(), { code: 'AccessDenied', status: 'BLOCKED' }) })
+  const report = await runChecks({ ...c, discoveryMode: true, bucket: undefined }, { aws, discoveryIssues: { bucket: '有兩個 Bucket，請選擇' }, request: async () => ({ status: 503, headers: {}, text: '' }) })
+  expect(aws.mock.calls.some(([s]) => s === 's3api')).toBe(false)
+  expect(report.checks.find(x => x.id === 's3.block')).toMatchObject({ status: 'BLOCKED', fix: '有兩個 Bucket，請選擇' })
+  expect(report.checks.find(x => x.id === 'manual.ssh-owner').status).toBe('MANUAL')
 })

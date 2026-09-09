@@ -9,18 +9,19 @@ const dns = require('node:dns').promises
 const http = require('node:http')
 const https = require('node:https')
 const exec = promisify(execFile)
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
 const LABELS = { PASS: '通過', FAIL: '需修正', BLOCKED: '無法檢查', MANUAL: '待人工驗證' }
 const WEEKS = ['01-account-and-cost', '02-iam', '03-vpc', '04-vpc-security', '05-ec2', '06-s3', '07-rds', '08-ses', '09-ecr', '10-container-deploy', '11-nginx-https']
 const READS = new Set([
   'sts/get-caller-identity', 'ec2/describe-instances', 'ec2/describe-addresses',
   'ec2/describe-images', 'ec2/describe-security-groups', 'ec2/describe-route-tables',
   'rds/describe-db-instances', 'iam/get-instance-profile',
+  'iam/list-role-policies', 'iam/get-role-policy', 'iam/list-attached-role-policies', 'iam/get-policy', 'iam/get-policy-version',
   's3api/get-bucket-location', 's3api/get-public-access-block', 's3api/get-bucket-ownership-controls',
   's3api/get-bucket-policy-status', 's3api/get-bucket-versioning', 's3api/get-bucket-cors',
   's3api/list-object-versions', 's3api/head-object',
   'sesv2/get-email-identity', 'ecr/describe-images',
-  'budgets/describe-budget', 'budgets/describe-notifications-for-budget'
+  'budgets/describe-budget', 'budgets/describe-budgets', 'budgets/describe-notifications-for-budget'
 ])
 function scrub (value) {
   return String(value).replace(/arn:aws[^\s"<>]*/g, '[ARN 已遮蔽]')
@@ -113,15 +114,15 @@ function dbRulesCorrect (groups, webIds) {
 function makeReporter (onResult = () => {}) {
   const checks = []
   async function check (id, week, title, expected, fix, action) {
-    let status = 'PASS'; let actual
+    let status = 'PASS'; let actual; let nextStep
     try {
       const result = await action()
       if (!result || typeof result.ok !== 'boolean') throw problem('IncompleteEvidence')
       status = result.ok ? 'PASS' : 'FAIL'; actual = result.actual
-    } catch (e) { status = e.status || 'BLOCKED'; actual = `${e.code || 'CheckError'}；本項未取得足夠證據。` }
+    } catch (e) { status = e.status || 'BLOCKED'; actual = `${e.code || 'CheckError'}；本項未取得足夠證據。`; nextStep = e.fix }
     const row = { id, week: `W${week}`, title, status, expected, actual: scrub(actual), fix,
       lesson: `https://gonsakon.github.io/aws-course-hub/#/weeks/${WEEKS[week - 1]}/learn` }
-    if (status === 'BLOCKED') row.fix = '先確認 AWS 登入、查詢權限及網路，再重跑；不要為通過檢查而擴大 EC2 執行角色。原檢查：' + fix
+    if (status === 'BLOCKED') row.fix = nextStep || '先確認 AWS 登入、查詢權限及網路，再重跑；不要為通過檢查而擴大 EC2 執行角色。原檢查：' + fix
     checks.push(row); onResult(row)
   }
   function manual (id, week, title, expected, fix) {
@@ -137,7 +138,11 @@ async function runChecks (c, deps = {}) {
   const resolve4 = deps.resolve4 || dns.resolve4
   const now = deps.now || new Date()
   const r = makeReporter(deps.onResult)
-  const check = r.check
+  const check = (id, week, title, expected, fix, action) => r.check(id, week, title, expected, fix, async () => {
+    const issue = deps.discoveryIssues && require('./discover-final').discoveryIssue(id, deps.discoveryIssues)
+    if (issue) throw Object.assign(problem('ResourceNotIdentified'), { fix: issue })
+    return action()
+  })
   const cache = new Map()
   function cached (key, fn) { if (!cache.has(key)) cache.set(key, fn()); return cache.get(key) }
   const identity = () => cached('identity', () => aws('sts', 'get-caller-identity'))
@@ -198,7 +203,7 @@ async function runChecks (c, deps = {}) {
     const x = await ec2(); const t = routeFor(await tables(x.VpcId), x.SubnetId)
     return { ok: Boolean(t?.Routes?.some(x => x.DestinationCidrBlock === '0.0.0.0/0' && x.GatewayId?.startsWith('igw-') && x.State === 'active')), actual: `Subnet=${x.SubnetId}；有效 Route Table=${t?.RouteTableId || '找不到'}` }
   })
-  await check('network.web-sg', 4, 'EC2 全部掛載 SG 的合併入站規則', '只開 80／443 公網與 22 指定 My IP/32', '移除額外 SG 或過寬規則；確認 22 的 IP 是自己的電腦，不是 CloudShell IP。', async () => {
+  await check('network.web-sg', 4, 'EC2 全部掛載 SG 的合併入站規則', c.discoveryMode ? '只開 80／443 公網與 22 單一 IPv4/32；該 IP 是否為自己的電腦另行確認' : '只開 80／443 公網與 22 指定 My IP/32', '移除額外 SG 或過寬規則；確認 22 的 IP 是自己的電腦，不是 CloudShell IP。', async () => {
     const ids = instanceGroupIds(await ec2())
     const gs = await groups(ids)
     return { ok: webRulesCorrect(gs, c.sshCidr), actual: `實際 SG=${ids.join(', ')}；共 ${gs.reduce((n, x) => n + (x.IpPermissions?.length || 0), 0)} 條入站規則，包含所有附加 SG。` }
@@ -277,6 +282,7 @@ async function runChecks (c, deps = {}) {
       return { ok: Boolean(match && all), actual: `同組資源／映像=${Boolean(match)}；主機 ${ids.length} 項全通過=${all}；未通過=${(h.checks || []).filter(x => x.status !== 'PASS').map(x => x.id).join(', ') || '無'}；報告為學生自查證據，仍需克庭抽查。` }
     })
   } else r.manual('manual.runtime', 10, '主機內 Compose／環境與版本對照', 'deployer、Healthy、單容器、127.0.0.1:8080、DB TLS、執行 digest 對上 ECR', '使用 docs/final-check.md 的主機檢查命令，再以 --host-report 加入同次報告。')
+  if (c.discoveryMode) r.manual('manual.ssh-owner', 4, 'SSH 來源是自己的電腦', '22 限制的單一 /32 與自己電腦的公開 IP 一致', 'CloudShell 的來源 IP 無法代表自己的電腦；現場 SSH 成功並核對 My IP。')
   r.manual('manual.permissions', 2, '實際 IAM Allow／Deny', '以 EC2 Role 正確資源證明 pull 成功、push 拒絕', '依 W2／W9／W10 提供受控實測。User 查得到設定不代表 EC2 Role 有權限。')
   r.manual('manual.flow', 10, '網站功能與 S3 照片', '註冊登入、照片上傳並重登讀回、建立課程、模擬購買', '可用 npm run check:flow -- --config deploy/check-final.local.json --allow-test-data；會建立專用測試資料，詳見操作文件。')
   r.manual('manual.mail', 8, '報名、堂數與通知實收', '報名記錄與扣堂正確，SES accepted 與實際信箱收到分開留證', '使用自己已驗證且同意收信的信箱現場操作；不要將 accepted 當成實收。老師端仍待補整合驗證。')
@@ -296,26 +302,40 @@ function parseArgs (args) {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--help') result.help = true
     else if (['--config', '--out', '--profile', '--host-report'].includes(args[i]) && args[i + 1] && !args[i + 1].startsWith('--')) result[args[i++].slice(2)] = args[i]
+    else if (args[i].startsWith('https://') && !result.url) result.url = args[i]
     else throw new Error(`未知或缺少值的參數：${args[i]}`)
   }
-  if (!result.help && !result.config) throw new Error('請使用 --config 指定自己的設定 JSON。')
+  if (!result.help && !result.config && !result.url) throw new Error('請在指令後面填自己的 HTTPS 網址：npm run check:final -- https://你的網址')
+  if (result.config && result.url) throw new Error('網址與 --config 請擇一使用。')
   return result
 }
 async function main () {
   const args = parseArgs(process.argv.slice(2))
-  if (args.help) return console.log('node scripts/check-final.js --config deploy/check-final.local.json [--out artifacts/final-check] [--profile NAME] [--host-report artifacts/host.json]\n只讀；需 Node.js 20.19+ 與 AWS CLI v2。退出碼 0=自動檢查無失敗（仍有人工項）、1=需修正、2=權限或執行錯誤。')
-  const c = validateConfig(JSON.parse(fs.readFileSync(args.config, 'utf8')))
+  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找東京的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2。\n老師進階：--config FILE、--profile NAME、--host-report FILE、--out DIR。')
+  let c; let discovery
+  if (args.url) {
+    console.log('正在依網站網址尋找東京的 AWS 資源；不需填 JSON。')
+    const { discover, terminalChoose } = require('./discover-final')
+    discovery = await discover(args.url, { profile: args.profile, choose: terminalChoose })
+    c = discovery.config
+    for (const issue of Object.values(discovery.issues)) console.log('待確認：' + issue)
+  } else c = validateConfig(JSON.parse(fs.readFileSync(args.config, 'utf8')))
   console.log('LiveFit 最終作業自查：只讀 AWS 設定與網站，不重啟、不寄信。')
   const hostReport = args['host-report'] ? JSON.parse(fs.readFileSync(args['host-report'], 'utf8')) : undefined
-  const report = await runChecks(c, { profile: args.profile, hostReport, onResult: x => console.log(`[${LABELS[x.status]}] ${x.week} ${x.title} — ${x.actual}`) })
+  const report = await runChecks(c, { profile: args.profile, hostReport, discoveryIssues: discovery?.issues, onResult: x => console.log(`[${LABELS[x.status]}] ${x.week} ${x.title} — ${x.actual}`) })
+  if (discovery) {
+    report.discovery = { notes: discovery.notes, unresolved: discovery.issues }
+    report.discoverySha256 = createHash('sha256').update(fs.readFileSync(path.join(__dirname, 'discover-final.js'))).digest('hex')
+  }
   report.scriptSha256 = createHash('sha256').update(fs.readFileSync(__filename)).digest('hex')
   report.configSha256 = createHash('sha256').update(JSON.stringify(c)).digest('hex')
   const out = path.resolve(args.out || 'artifacts/final-check')
   fs.mkdirSync(out, { recursive: true, mode: 0o700 })
+  if (discovery && Object.keys(discovery.issues).length === 0) fs.writeFileSync(path.join(out, 'resources.local.json'), JSON.stringify(c, null, 2) + '\n', { mode: 0o600 })
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 })
   fs.writeFileSync(path.join(out, 'report.html'), renderHtml(report), { mode: 0o600 })
   console.log(`\n${Object.entries(totals(report)).map(([s, n]) => `${LABELS[s]} ${n}`).join(' / ')}\n報告：${out}/report.html\n退出碼 0 也不代表人工項已完成。`)
   process.exitCode = exitCode(report)
 }
-if (require.main === module) main().catch(e => { console.error(scrub(e.message)); process.exitCode = 2 })
 module.exports = { VERSION, READS, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
+if (require.main === module) main().catch(e => { console.error(scrub(e.message)); process.exitCode = 2 })

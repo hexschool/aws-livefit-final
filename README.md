@@ -9,7 +9,7 @@
 - [驗證結果](docs/validation.md)：本機、真實 AWS 已通過與待驗證分開記錄。
 - [瀏覽器操作紀錄](docs/browser-operations.md)：Console、網站與終端操作分開逐筆追加。
 
-- [最終作業自動檢查](docs/final-check.md)：學生以自己的資源設定跑網站／AWS／主機自查；可選擇實測功能，產生給克庭的 HTML／JSON 報告。
+- [最終作業自動檢查](docs/final-check.md)：學生只輸入自己的網站網址，自動找 AWS 資源並產生報告；主機與功能測試依需要補查。
 
 ## 本機預覽
 

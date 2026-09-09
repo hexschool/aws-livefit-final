@@ -1,67 +1,43 @@
 # LiveFit 最終作業自動檢查
 
-這三支腳本對照 2026-09-09 的 LiveFit 東京實機與 [Notion 週次對照](notion-alignment.md)，檢查學生自己的完成版部署。**不是每週小題測試，也不會自動評分。**
+輸入自己的 HTTPS 網址，就能檢查東京 LiveFit 的網站與 AWS 設定。檢查範圍對照 [Notion 週次](notion-alignment.md)，本版不含監控。
 
-1. `check-final.js`：只讀網站與 AWS 設定，產生 HTML／JSON 報告。
-2. `check-host.py`：透過自己的 SSH，在指定 EC2 內只讀 Docker、OS、檔案權限與 DB TLS；不需要安裝 Python 套件。
-3. `check-flow.js`：明確加上 `--allow-test-data` 後，透過網站 API 實測功能並留下可辨識的測試資料。
+## 1. 只輸入自己的網站網址
 
-預設檢查不修改 IAM／SG／任何 AWS 設定，不建立監控、不重新部署、不重啟、不報名、不寄信。只讀 AWS API／S3／網站請求仍可能計入既有 API 或流量用量；本腳本不新增常駐服務或排程。
-
-## 1. 準備自己的設定
-
-取得老師提供的 [私密完整 repo](https://github.com/hexschool/aws-livefit-final)。需要 Node.js 20.19+ 與 AWS CLI v2；CloudShell 本次實測為 Node.js 20.20.2。執行檢查本身只使用內建函式庫，**不用先 npm install**。
+在已取得的 repo 資料夾、已登入自己 AWS 的終端執行：
 
 ```sh
-cp deploy/check-final.example.json deploy/check-final.local.json
+npm run check:final -- https://你的網站
 ```
 
-打開 `deploy/check-final.local.json` 填自己的值。檔案只放資源識別資訊，不放 DB 密碼、JWT secret、AWS key、SSH 私鑰內容。
+**不需要建立 JSON，也不需要自己查 EC2 ID、RDS 名稱、Bucket、ECR、寄件信箱或預算名稱。** 腳本固定查東京，先從網址找到 EC2，再讀它的 VPC 與 Role 來找對應資源。有多個候選才顯示選單，輸入編號即可；無法確認的項目會保留「無法檢查」，不會任選一個。
 
-| 欄位 | 從哪裡取得 |
-|---|---|
-| url | 自己 HTTPS 網站根網址，不含 `/ready`、帳密、query |
-| region | 本課程固定 `ap-northeast-1` |
-| instanceId | 今天用來部署的 EC2 instance ID，不是 Name 標籤 |
-| dbInstanceIdentifier | 自己 RDS 的 DB identifier，不是 endpoint |
-| bucket | 自己私有 S3 Bucket 名稱 |
-| practiceKey | W6 已上傳且覆寫過的同名圖片，例如 `practice/people-01.png` |
-| repository／imageTag | 自己 ECR 的 private repository 與固定 tag |
-| sshCidr | 允許 SSH 的自己電腦公開 IPv4 加 `/32`，不要填 CloudShell IP |
-| sesIdentity | 自己已驗證的寄件 Email 或 Domain Identity |
-| budgetName | 自己 W1 的月成本預算名稱 |
+需要 Node.js 20.19+ 與 AWS CLI v2，執行本腳本不用 npm install。若使用命名 profile，可在指令最後加 `--profile 你的設定名稱`。
 
-實例規格、私有網路、三天備份等標準在老師的腳本內。學生改的是自己的資源欄位，不可修改檢查程式降低標準；若講義核准其他部署方案，先由老師調整標準。
+## 2. 如果使用東京 CloudShell
 
-## 2. 跑網站與 AWS 設定自查
+CloudShell 沿用你已登入的 AWS Console 權限。本機 CLI 權限不足時可用這個方式，不用另外貼 AWS key。
 
-**方式 A：在自己的電腦執行**。沿用 W2 已設定的 AWS CLI 身分，確認它能讀取本作業資源：
+第一次在本機 repo 資料夾打包兩個腳本（更新版本時換一個壓縮檔名，CloudShell 不覆蓋同名檔）：
 
 ```sh
-npm run check:final -- --config deploy/check-final.local.json
-# 有命名 profile 時，在結尾加 --profile YOUR_PROFILE
+tar -czf livefit-selfcheck.tar.gz scripts/check-final.js scripts/discover-final.js
 ```
 
-**方式 B：使用自己登入的東京 CloudShell**。CloudShell 沿用 Console 身分的 AWS 權限，不需把長期 key 貼進終端。私密 repo 的 GitHub 登入與 AWS 登入是兩件事；最簡單是上傳自己打包的檢查檔：
-
-在本機 repo 根目錄執行：
-
-```sh
-tar -czf livefit-selfcheck.tar.gz scripts/check-final.js deploy/check-final.local.json
-```
-
-Console → Tokyo → CloudShell → Actions → Upload file，選剛才的壓縮檔。在 CloudShell 執行：
+CloudShell → Actions → Upload file，選這個檔案。貼上：
 
 ```sh
 mkdir -p ~/livefit-selfcheck
 tar -xzf ~/livefit-selfcheck.tar.gz -C ~/livefit-selfcheck
 cd ~/livefit-selfcheck
-node scripts/check-final.js --config deploy/check-final.local.json
+node scripts/check-final.js https://你的網站
 ```
+
+之後只要重新執行最後一行，改自己的網址即可。這個打包檔只有程式，沒有設定表或憑證。
 
 每項會即時輸出，通常數分鐘內完成；AWS 網路、權限及分頁數會影響時間。單一項目失敗會繼續檢查其餘項目。
 
-報告：`artifacts/final-check/report.html` 與 `report.json`。CloudShell 用 Actions → Download file，填完整路徑 `/home/cloudshell-user/livefit-selfcheck/artifacts/final-check/report.html` 下載。JSON 同樣下載；學生自查用瀏覽器開 HTML，克庭可以查 JSON 的 check ID 與時間。
+報告：`artifacts/final-check/report.html` 與 `report.json`。CloudShell 用 Actions → Download file，填完整路徑 `/home/cloudshell-user/livefit-selfcheck/artifacts/final-check/report.html` 下載。學生先下載 HTML 查看結果；JSON 留作克庭需要時的詳細核對。
 
 | 顯示 | 代表什麼 | 學生下一步 |
 |---|---|---|
@@ -74,7 +50,7 @@ node scripts/check-final.js --config deploy/check-final.local.json
 
 依 2026-09-09 老師決定，本版最終作業不包含 CloudWatch／SNS 監控，腳本也不呼叫相關 API 或要求監控資源欄位。W1 的費用預算保留。
 
-## 3. 補主機內的證據
+## 3. 進階：需要查主機內部時
 
 在自己電腦、repo 根目錄執行。替換私鑰與 EC2 公開 IP，沿用 W10 deployer；先完成 W5 的 SSH 主機指紋核對，不要關閉 host key 檢查。
 
@@ -84,7 +60,7 @@ ssh -i ~/.ssh/YOUR_DEPLOY_KEY -o IdentitiesOnly=yes -o BatchMode=yes \
   deployer@YOUR_EC2_PUBLIC_IP 'python3 -' \
   < scripts/check-host.py > artifacts/host.json
 
-npm run check:final -- --config deploy/check-final.local.json \
+npm run check:final -- https://你的網站 \
   --host-report artifacts/host.json
 ```
 
@@ -96,12 +72,14 @@ npm run check:final -- --config deploy/check-final.local.json \
 
 要在 CloudShell 合併：把 `artifacts/host.json` 加入上面的 tar 命令，一起上傳，然後加 `--host-report artifacts/host.json`。主機報告只有資源名稱、布林與狀態，沒有環境檔內容或 token；仍屬私密交件，不隨 repo 推送。
 
-## 4. 跑真正網站流程
+## 4. 進階：需要實測網站功能時
 
-這個模式只需 Node.js 與自己的 HTTPS 網站，不需要查 AWS 的權限。它會產生應用資料，因此必須加明確旗標：
+網址自查完成且資源都已找到時，會自動產生 `artifacts/final-check/resources.local.json`。這份設定只供腳本後續使用，含自己資源名稱與寄件身分，留在本機且不進 Git；學生不用編輯；若自查在 CloudShell 跑，先下載這份檔案放回本機相同位置。
+
+功能模式只需 Node.js，沿用這份自動設定；會建立測試資料，所以必須明確加旗標：
 
 ```sh
-npm run check:flow -- --config deploy/check-final.local.json --allow-test-data
+npm run check:flow -- --config artifacts/final-check/resources.local.json --allow-test-data
 ```
 
 每次新增兩個 `驗收-日期-亂數` 會員、升級其中一人為教練、上傳一張極小 PNG、儲存 profile key 並再次登入讀回、建立七天後的一堂測試課程、另一會員使用既有方案模擬購買一次。使用 `example.invalid` 測試信箱，不保留帳密或 token；不建立額外技能／方案。
@@ -123,6 +101,15 @@ npm run check:flow -- --config deploy/check-final.local.json --allow-test-data
 
 不自動證明：IAM 實際 Allow／Deny、NACL 規則與所有可達性、所有 policy 最小權限、真實報名通知收信、重啟後資料保存、RDS 還原、Certbot 續期 dry-run、學生能否解釋架構。這些仍在最終作業驗收表內。
 
+## 自動辨識的範圍
+
+- 本作業的網址直接指向單一 EC2；CloudFront／ALB 或多個 DNS IP 會列無法辨識。
+- RDS 依同 VPC 找候選；S3／ECR／SES 依 EC2 Role 明列的資源找候選。這只是確認要查哪個資源，實際容器是否使用它們仍由主機檢查或現場抽查核對。
+- 共用 Role／萬用資源權限不足以判定唯一 Bucket；不掃整個帳號猜測，也不自動增加權限。
+- SSH 可自動檢查是否只開單一 IPv4 `/32`；無法從 CloudShell 判定它是不是你電腦的 IP，這一點現場核對。
+- 多個候選要在互動終端選擇；直接 Enter 可暫略，該項保持無法檢查。無人操作的 CI 也不會自動選第一個。
+- 老師處理特殊部署時仍可使用 `--config deploy/check-final.local.json` 與範例設定；一般學生從網址入口開始即可。
+
 ## 查詢權限與常見問題
 
 檢查者使用的是自己的 CLI／CloudShell 身分，**不要把查詢權限加到 EC2 執行 Role 來讓腳本變綠**。沒有權限時先與老師確認 W2 操作身分；本工具不自動建立或套用 IAM Policy。
@@ -132,8 +119,8 @@ npm run check:flow -- --config deploy/check-final.local.json --allow-test-data
 | STS | GetCallerIdentity |
 | EC2 | DescribeInstances、DescribeImages、DescribeAddresses、DescribeSecurityGroups、DescribeRouteTables |
 | RDS | DescribeDBInstances |
-| IAM | GetInstanceProfile |
-| Budgets | DescribeBudget、DescribeNotificationsForBudget（IAM 動作對應 `budgets:ViewBudget`） |
+| IAM | GetInstanceProfile、ListRolePolicies、GetRolePolicy、ListAttachedRolePolicies、GetPolicy、GetPolicyVersion；僅查網站 EC2 掛載的 Role |
+| Budgets | DescribeBudgets、DescribeBudget、DescribeNotificationsForBudget（IAM 動作對應 `budgets:ViewBudget`） |
 | S3 | GetBucketLocation、GetBucketPublicAccessBlock、GetBucketOwnershipControls、GetBucketPolicyStatus、GetBucketVersioning、GetBucketCORS、ListBucketVersions、GetObject（HeadObject） |
 | SES | GetEmailIdentity |
 | ECR | DescribeImages |
@@ -150,3 +137,5 @@ AWS CLI 自動處理分頁；資料只存在當次記憶體，報告只取白名
 - [S3 Bucket Policy Status](https://docs.aws.amazon.com/cli/latest/reference/s3api/get-bucket-policy-status.html)：政策公開狀態與查詢權限。
 - [IAM Instance Profile](https://docs.aws.amazon.com/cli/latest/reference/iam/get-instance-profile.html)：取得 profile 與實際 Role。
 - [CloudShell](https://docs.aws.amazon.com/cloudshell/latest/userguide/welcome.html)：沿用 Console 登入權限的瀏覽器終端。
+
+- [IAM GetRolePolicy](https://docs.aws.amazon.com/cli/latest/reference/iam/get-role-policy.html)、[Budgets DescribeBudgets](https://docs.aws.amazon.com/cli/latest/reference/budgets/describe-budgets.html)：網址入口的唯讀資源辨識。
