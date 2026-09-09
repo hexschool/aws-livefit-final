@@ -36,7 +36,7 @@ function roleResources (documents, service, region, account) {
       }
     }
   }
-  if (broad) throw new Error('EC2 Role 使用共用或萬用資源權限，無法據此確定這個網站使用哪個資源；請克庭協助核對。')
+  if (broad) throw new Error('EC2 Role 使用共用或萬用資源權限，無法據此確定這個網站使用哪個資源；請回查本次網站的部署設定。')
   return [...values].sort()
 }
 async function discover (raw, deps = {}) {

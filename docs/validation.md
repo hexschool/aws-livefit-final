@@ -38,7 +38,7 @@
 - RDS 還原、映像回復版本尚未實測。
 - W1 已於 2026-09-09 10:15 回查 aws-course-budget：Monthly US$30，Healthy；Actual >85%、Actual >100%、Forecasted >100% 三個門檻均未超過。仍未測試預算通知實際收信。
 - GitHub Actions 已於程式提交 734c176 通過合約與 AWS 模擬驗證，見下方版本交付紀錄；後續只有文件更新時不重跑同一批程式測試。
-- 尚未由克庭獨立部署，也未完成計時彩排／清除驗證，教材不得標 READY。
+- 尚未由獨立部署試跑，也未完成計時彩排／清除驗證，教材不得標 READY。
 
 ## 資源保留決策
 
@@ -56,7 +56,7 @@
 - 程式提交 734c1765e179769ffbae52be555c3dab286fa4e8 已推送；[GitHub Actions](https://github.com/hexschool/aws-livefit-final/actions/runs/34300991490) 的啟動本機環境、合約測試、AWS 模擬測試與清除步驟均 success。這個 CI 不會連線部署至 AWS。
 - 上傳前檢查 168 個工作檔候選與 253 個 Git 物件；未發現 AWS Access Key、私鑰、正式 DB／JWT 值或完整帳號識別碼。這是模式與已知秘密掃描，不宣稱能偵測所有類型機密。
 - .env.aws 與私鑰未追蹤，正式密碼未寫入紀錄或映像。
-- 本機 AWS Course Hub 新增「13. 最終作業」與六個分頁：本週概覽、老師先學、課程講義、老師提詞講稿、學生任務、克庭驗收；目前為 DRAFT，未推送／部署這批課程網站變更。
+- 本機 AWS Course Hub 新增「13. 最終作業」與六個分頁：本週概覽、老師先學、課程講義、老師提詞講稿、學生任務、作業驗收；目前為 DRAFT，未推送／部署這批課程網站變更。
 - 課程 typecheck／Vite build 通過；實際瀏覽器從左側入口逐一點開六份文件，無 console error，窄視窗頁面無橫向溢出；原課程地圖保留十二週。
 - 2026-09-09 10:09（台北）再次讀取正式 HTTPS /ready，仍回 ready。
 
@@ -85,7 +85,7 @@
 - `scripts/check-flow.js --allow-test-data` 於 11:39 在真實 HTTPS 網站：4 項通過（兩帳號註冊／登入、S3 上傳／保存 key／重新登入／bytes 比對／未簽名 403、建立課程讀回、另一會員模擬購買 3 堂）；報名與寄信列人工項。新增測試資料前綴 `驗收-2026-09-09-6cde5a22`，保留兩名測試會員、一張小 PNG、一堂測試課程與一筆模擬購買，沒有金流、寄信、重啟或刪除既有資料。
 - 第一輪實機驗證找出檢查器的 ECR CLI JSON 大小寫與舊 Budget `ThresholdType` 省略問題，已修正並重測；沒有為了讓報告變綠而修改 AWS 設定。
 - Jest `test:checker` 20 項通過：包括多 SG／ENI 合併、錯 SG／公開 SSH、main route fallback、錯 alarm dimension／period、權限不足不誤判、無 Policy 與 AccessDenied、report HTML escape、未 opt-in 零寫入、不同主機／DB／過期報告拒絕。
-- 自查使用方式已補到本機第 13 單元「學生任務／克庭驗收」；課程 build 通過，這批課程文件仍未發布 GitHub Pages。
+- 自查使用方式已補到本機第 13 單元「學生任務／作業驗收」；課程 build 通過，這批課程文件仍未發布 GitHub Pages。
 - 原始 HTML／JSON 報告保存在 ignored `artifacts/final-check-2026-09-09/`、`artifacts/final-flow-2026-09-09/` 與 `artifacts/host-2026-09-09.json`。個人設定與 tar 包也被 gitignore 排除，CI 只跑本機回歸，不會驗收或操作學生 AWS。
 
 
@@ -96,7 +96,7 @@
 - 11:39 的網站實測仍為 4 PASS、0 FAIL、0 BLOCKED、1 MANUAL；移除監控未改功能測試步驟，沒有為更新版號重複新增測試資料。網站報告保留當時版本與時間。
 - 19 個 checker 回歸測試通過，包含不呼叫 CloudWatch／SNS 的驗證。提交 1e492c9f2f5cce2814238bf99df7230322170f78 已推到私密 repo；[CI run 34309238996](https://github.com/hexschool/aws-livefit-final/actions/runs/34309238996) 的 checker、合約、AWS 模擬測試均 success。CI 沒有操作真實 AWS。
 - 最新原始報告保存在 ignored artifacts/final-check-2026-09-09-v1.1.0/ 與 artifacts/host-2026-09-09-v1.1.0.json；原始 JSON 的 scriptSha256 已比對目前提交的腳本一致。初版含監控報告另留原路徑作歷史，不用作本版交件。
-- 本機第 13 單元六份文件同步移除監控要求，學生任務與克庭驗收附自查步驟；typecheck／Vite build 與瀏覽器學生任務入口通過。本批課程仍僅本機，未部署 Pages，維持 DRAFT。
+- 本機第 13 單元六份文件同步移除監控要求，學生任務與作業驗收附自查步驟；typecheck／Vite build 與瀏覽器學生任務入口通過。本批課程仍僅本機，未部署 Pages，維持 DRAFT。
 - 自查通過不代表最終作業全部通過：報名扣堂與通知實收、IAM 受控 Allow／Deny、重啟／還原、續期與設計說明仍依各報告人工項補證據。
 
 
@@ -114,4 +114,11 @@
 
 - checker 1.2.1 依使用者決定移除人工清單，終端、HTML 與 JSON 只呈現已執行的檢查，統計為通過／需修正／無法檢查。實際檢查與失敗判斷保留。
 - 27 個回歸測試通過；東京 CloudShell 以網址重跑為 25 PASS、0 FAIL、0 BLOCKED。功能腳本未重跑，只驗證原測試仍通過，避免增加測試資料。
-- 第 13 單元學生任務新增「截圖一：自查結果」和本次實機範例圖；克庭先看截圖，需要排查時才請學生提供報告。
+- 第 13 單元學生任務新增「截圖一：自查結果」和本次實機範例圖；課程團隊先看截圖，需要排查時才請學生提供報告。
+
+
+## 最終交件方式調整（2026-09-09）
+
+- 目前最終作業只以截圖一驗收：自己的指令／網址清楚，基本 25 項通過、需修正 0、無法檢查 0。選用主機檢查時通過數可多於 25。
+- 其他文件、報告、現場操作與口頭問答不列交件要求。上述舊版紀錄只保留當時狀態，當前要求以學生任務及自查說明為準。
+- 課程分頁與相關文件使用中性的「作業驗收」，不列私人審稿者姓名。

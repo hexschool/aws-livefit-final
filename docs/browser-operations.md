@@ -278,13 +278,13 @@
 - 終端：EC2 Role 的 ECR InitiateLayerUpload 被 AccessDenied 拒絕；拉取權限仍可用。
 - SES Console：Tokyo Sandbox／Healthy，當日發信使用量 1。IAM Console 開啟本次 Role 查看，尚未新增 CloudWatch 權限。
 - 已準備 monitoring-access-review.md，詢問 W12 指標／日誌／單一告警、SNS 收信與確認，以及一封真實報名通知；尚待回覆，不以其他新訊息視為批准。
-- 使用者要求課程左側增加「13. 最終作業」及六份分頁、改「克庭驗收」；另外明確要求 hexschool 私密 AWS 解答 repo。CLI 已建立 hexschool/aws-livefit-final（Private）；準備上傳前掃描工作檔與 Git 歷史，未命中 AWS Key、私鑰、正式 DB／JWT 秘密或完整帳號識別碼。程式與教材進度另記後續紀錄。
+- 使用者要求課程左側增加「13. 最終作業」及六份分頁、改「作業驗收」；另外明確要求 hexschool 私密 AWS 解答 repo。CLI 已建立 hexschool/aws-livefit-final（Private）；準備上傳前掃描工作檔與 Git 歷史，未命中 AWS Key、私鑰、正式 DB／JWT 秘密或完整帳號識別碼。程式與教材進度另記後續紀錄。
 
 
 ### B037｜2026-09-09T10:09:14+08:00｜私密解答 repo 與最終作業教材
 - GitHub CLI：建立 hexschool/aws-livefit-final，Private；新增 origin，將程式提交 734c176 推送 main。再讀回 isPrivate=true／defaultBranch=main；GitHub Actions run 34300991490 的合約與 AWS 模擬測試通過。
 - 機密檢查：掃描待提交檔案與原 Git 歷史，不輸出秘密值；正式 .env.aws／SSH key 不進 Git。保留原前端 CRLF 換行，不為 whitespace 警示改寫整批既有檔案。
-- 本機課程程式：保留十二週課程地圖，增加 13 最終作業的六份 Markdown；共用驗收分頁改名克庭驗收。老師先學／講義包含實際改造、Console 欄位、部署命令、排錯與 W1～W12 對應；學生任務以自己的 URL、版本、設定與功能證據提交。
+- 本機課程程式：保留十二週課程地圖，增加 13 最終作業的六份 Markdown；共用驗收分頁改名作業驗收。老師先學／講義包含實際改造、Console 欄位、部署命令、排錯與 W1～W12 對應；學生任務以自己的 URL、版本、設定與功能證據提交。
 - 瀏覽器：沿用 in-app 本機課程分頁。窄視窗左側選單原先收合，先展開再點 13 最終作業，路由成功；依序點自學／講義／講稿／任務／驗收，六份都能讀取，Console 無 error。
 - 視覺檢查：預設 366px 視窗，頁寬與 viewport 同為 366，分頁採橫向捲動；未額外改尺寸。檢查原 course-map 仍為 W1～W12。
 - 終端：課程 typecheck／Vite build 通過，Markdown 連結與 code fence 檢查通過；正式 HTTPS /ready 再次回 ready。
@@ -314,7 +314,7 @@
 - 使用者明確決定不要監控；取消先前 CloudWatch／SNS 提案，移除最終作業設定欄位與六份教材的要求。不建立監控或 SNS，不再等待監控授權。額外報名通知仍未執行。
 - 終端：重新經既有 deployer SSH 執行只讀主機檢查，12 項通過；未讀出環境檔內容、未重啟／停止主機。
 - 瀏覽器：沿用東京 CloudShell，Actions → Upload file 上傳交付版腳本、非秘密資源設定與新主機報告；執行只讀檢查得到 26 PASS／0 FAIL／0 BLOCKED／6 MANUAL。透過可見終端分段讀回 report.json，保留原始時間與版本，比對腳本 SHA-256 一致。
-- 本機課程瀏覽器：開啟第 13 單元學生任務，確認自查指令、克庭驗收入口存在，沒有 W12 監控交件要求；未發布課程網站。
+- 本機課程瀏覽器：開啟第 13 單元學生任務，確認自查指令、作業驗收入口存在，沒有 W12 監控交件要求；未發布課程網站。
 - GitHub CLI：推送 1e492c9，讀回私密設定與 CI，checker／合約／AWS 模擬測試均 success。
 - 最終報告產生本機 HTML 預覽，個人設定與原始報告不進 Git；原監控初版記錄保留作歷史，本段與最新 validation 記錄為目前範圍。
 
@@ -334,3 +334,9 @@
 - CloudShell Actions → Upload file，上傳 livefit-url-check-v121.tar.gz，讀回成功後解壓；再次只輸入網址實測：25 PASS／0 FAIL／0 BLOCKED，已無人工清單。未重跑會建立會員的網站功能測試。
 - 擷取新版終端畫面，存入本機課程 weeks/13-final-project/assets/self-check-result.png，附於「截圖一：自查結果」。學生自查只需截到指令、自己網址與最後統計；HTML／JSON 改為排查需要時再提供。
 - 27 個自查回歸測試通過；本次課程頁面仍留本機。
+
+
+### B043｜2026-09-09｜中性驗收名稱與單張截圖交件
+- 依使用者決定，課程介面、任務、講義與 GitHub 文件移除私人審稿者姓名，驗收分頁統一為「作業驗收」。既有操作紀錄亦改用中性稱呼。
+- 最終作業只收截圖一：執行指令、自己的網址與最後檢查統計；刪除額外報告、Console 證據、現場重做與問答交件要求。教學實作內容保留作講解與練習。
+- GitHub repo 說明、issues 與 releases 已查核，沒有私人審稿者姓名；更新範圍是目前文件與介面。未修改 AWS 資源。

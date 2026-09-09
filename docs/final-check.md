@@ -37,7 +37,7 @@ node scripts/check-final.js https://你的網站
 
 終端、HTML 與 JSON 只列實際執行的檢查，不附「待人工驗證」清單。每項會即時輸出，通常數分鐘內完成；AWS 網路、權限及分頁數會影響時間。單一項目失敗會繼續檢查其餘項目。
 
-報告：`artifacts/final-check/report.html` 與 `report.json`。CloudShell 用 Actions → Download file，填完整路徑 `/home/cloudshell-user/livefit-selfcheck/artifacts/final-check/report.html` 下載。學生先下載 HTML 查看結果；JSON 留作克庭需要時的詳細核對。
+報告：`artifacts/final-check/report.html` 與 `report.json`。CloudShell 用 Actions → Download file，填完整路徑 `/home/cloudshell-user/livefit-selfcheck/artifacts/final-check/report.html` 下載。學生先下載 HTML 查看結果；JSON 留作自己排錯，不需提交。
 
 | 顯示 | 代表什麼 | 學生下一步 |
 |---|---|---|
@@ -85,27 +85,27 @@ npm run check:flow -- --config artifacts/final-check/resources.local.json --allo
 
 照片會比對真正的圖片 bytes、儲存 key，並確認已存在物件去除簽名後回 403。Node HTTP 測試不執行瀏覽器 CORS，因此仍需要設定檢查與一次真人瀏覽器上傳。
 
-結果在 `artifacts/final-flow/report.html`／`report.json`。JSON 的 `created` 列出本次帳號、照片 key、課程等識別資料，方便老師抽查與日後清除。腳本保留這些資料，不自動刪除；每次重跑會新增一組，勿排程反覆執行。
+結果在 `artifacts/final-flow/report.html`／`report.json`。JSON 的 `created` 列出本次帳號、照片 key、課程等識別資料，方便自己排錯與日後清除。腳本保留這些資料，不自動刪除；每次重跑會新增一組，勿排程反覆執行。
 
-**不呼叫報名 API，也不觸發 SES。** 報名扣堂、SES accepted 與信箱實收請依學生任務 B4 用自己已驗證且同意收信的 Email 手動完成；測試帳號不可拿去寄信。本腳本的購買是完成版的模擬購買，沒有真實金流。
+**不呼叫報名 API，也不觸發 SES。** 若自行練習報名與通知，使用自己已驗證且同意收信的 Email；測試帳號不可拿去寄信。本腳本的購買是完成版的模擬購買，沒有真實金流。
 
-## 5. 繳交給克庭
+## 5. 只提交截圖一
 
-- 自己的 HTTPS URL、repo commit、ECR tag／digest。
-- **截圖一：自查結果**。終端畫面包含執行指令、自己的 HTTPS 網址與最後的「通過／需修正／無法檢查」統計。
-- 自查只需這張截圖；HTML／JSON 留在自己電腦，克庭需要排查時再提供。其他功能驗收依學生任務安排。
-- 列出「需修正／無法檢查」尚未解決的原因與資源保留時段。
+截取指令執行完畢的終端畫面，需看見：
 
-報告內有時間與腳本 SHA-256 供版本對照，**不是簽章，也不能防止學生修改報告**。克庭應抽查同一網址、同一資源、同一版本；不能只靠全綠畫面判定完成。
+- 執行指令與自己的 HTTPS 網址。
+- 最後的「通過／需修正／無法檢查」統計。
 
-不自動證明：IAM 實際 Allow／Deny、NACL 規則與所有可達性、所有 policy 最小權限、真實報名通知收信、重啟後資料保存、RDS 還原、Certbot 續期 dry-run、學生能否解釋架構。這些仍在最終作業驗收表內。
+基本自查為 **25 項通過、0 項需修正、0 項無法檢查**。有錯誤時修正後重跑；若另外執行主機檢查，通過數可多於 25。
+
+最終作業只以這張截圖驗收。HTML／JSON 留作自己排錯，不需提交；也不要求其他文件、現場操作或口頭問答。
 
 ## 自動辨識的範圍
 
 - 本作業的網址直接指向單一 EC2；CloudFront／ALB 或多個 DNS IP 會列無法辨識。
-- RDS 依同 VPC 找候選；S3／ECR／SES 依 EC2 Role 明列的資源找候選。這只是確認要查哪個資源，實際容器是否使用它們仍由主機檢查或現場抽查核對。
+- RDS 依同 VPC 找候選；S3／ECR／SES 依 EC2 Role 明列的資源找候選。這只確認要查哪個資源，實際容器設定可用選用的主機檢查確認。
 - 共用 Role／萬用資源權限不足以判定唯一 Bucket；不掃整個帳號猜測，也不自動增加權限。
-- SSH 可自動檢查是否只開單一 IPv4 `/32`；無法從 CloudShell 判定它是不是你電腦的 IP，這一點現場核對。
+- SSH 可自動檢查是否只開單一 IPv4 `/32`；無法從 CloudShell 判定它是不是你電腦的 IP，本項只檢查來源範圍。
 - 多個候選要在互動終端選擇；直接 Enter 可暫略，該項保持無法檢查。無人操作的 CI 也不會自動選第一個。
 - 老師處理特殊部署時仍可使用 `--config deploy/check-final.local.json` 與範例設定；一般學生從網址入口開始即可。
 
@@ -124,7 +124,7 @@ npm run check:flow -- --config artifacts/final-check/resources.local.json --allo
 | SES | GetEmailIdentity |
 | ECR | DescribeImages |
 
-AWS CLI 自動處理分頁；資料只存在當次記憶體，報告只取白名單摘要，不寫出原始帳號、ARN、Email、簽名網址、環境變數或 AWS credentials。報表保留自己的網站／資源 ID 供克庭對照，不當作公開作品資料。
+AWS CLI 自動處理分頁；資料只存在當次記憶體，報告只取白名單摘要，不寫出原始帳號、ARN、Email、簽名網址、環境變數或 AWS credentials。報表保留自己的網站／資源 ID 供自己對照，不當作公開作品資料。
 
 - **S3 403 為什麼不直接通過？** 403 也可能是讀不到或不存在的物件。腳本先用查詢身分確認指定物件存在，再檢查未簽名 GET。
 - **我部署能用，CLI 卻 AccessDenied？** 網站用 EC2 Role，檢查器用你的操作身分；它們是兩組權限。要補查詢證據，不要擴大網站 Role。

@@ -274,7 +274,7 @@ async function runChecks (c, deps = {}) {
       const digest = img.imageDetails?.find(i => i.imageTags?.includes(c.imageTag))?.imageDigest
       const match = h.instanceId === c.instanceId && h.region === c.region && h.runtime?.dbHost === d.Endpoint?.Address && h.runtime?.bucket === c.bucket && h.runtime?.region === c.region && digest && h.imageDigests?.includes(digest)
       const all = ids.every(id => h.checks?.filter(x => x.id === id).length === 1 && h.checks.find(x => x.id === id).status === 'PASS')
-      return { ok: Boolean(match && all), actual: `同組資源／映像=${Boolean(match)}；主機 ${ids.length} 項全通過=${all}；未通過=${(h.checks || []).filter(x => x.status !== 'PASS').map(x => x.id).join(', ') || '無'}；報告為學生自查證據，仍需克庭抽查。` }
+      return { ok: Boolean(match && all), actual: `同組資源／映像=${Boolean(match)}；主機 ${ids.length} 項全通過=${all}；未通過=${(h.checks || []).filter(x => x.status !== 'PASS').map(x => x.id).join(', ') || '無'}。` }
     })
   }
   return { version: VERSION, checkedAt: now.toISOString(), target: { url: c.url, region: c.region, instanceId: c.instanceId, dbInstanceIdentifier: c.dbInstanceIdentifier, repository: c.repository, imageTag: c.imageTag }, checks: r.checks }
