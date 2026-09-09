@@ -14,6 +14,7 @@ const BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
 /** 回傳一個指向受測 server 的 supertest client */
 const api = () => request(BASE_URL);
 
+const userTokens = new Map();
 const rand = () => Math.random().toString(36).slice(2, 10);
 const randEmail = () => `student_${Date.now()}_${rand()}@example.com`;
 const randName = (prefix = '測試') => `${prefix}${rand()}`;
@@ -63,6 +64,7 @@ async function signupAndLogin(overrides = {}) {
   const { token, res } = await login(user.email, user.password);
   expectSuccess(res);
   const payload = jwt.decode(token);
+  userTokens.set(payload.id, token);
   return { token, userId: payload.id, ...user, loginRes: res };
 }
 
@@ -86,14 +88,14 @@ async function createCreditPackage(overrides = {}) {
   return { id: res.body.data.id, ...pkg, res };
 }
 
-/** 把使用者升級成教練（public 端點） */
+/** 以本人登入權限升級成教練（AWS 版） */
 async function promoteToCoach(userId, overrides = {}) {
   const body = {
     experience_years: 3,
     description: '一位用 API 生出來的教練',
     ...overrides,
   };
-  return api().post(`/api/admin/coaches/${userId}`).send(body);
+  return api().post(`/api/admin/coaches/${userId}`).set('Authorization', `Bearer ${userTokens.get(userId)}`).send(body);
 }
 
 /**

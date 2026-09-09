@@ -15,15 +15,7 @@
         <div class="lg:w-1/3">
           <div class="flex flex-col items-center">
             <div class="mb-4">
-              <label class="block text-lg font-semibold text-primary-0 mb-3">
-                教練照片網址 <span class="text-red-400">*</span>
-              </label>
-              <input
-                v-model="profileData.profile_image_url"
-                type="text"
-                placeholder="請輸入圖片網址 (例如：https://example.com/image.jpg)"
-                class="w-full px-4 py-3 border-2 border-primary-600 bg-primary-700 text-primary-0 rounded-lg focus:outline-none focus:border-secondary-800 transition-all duration-300 text-lg mb-4 placeholder-primary-400"
-              />
+              <CoachPhotoUpload @uploaded="photo => { profileData.profile_image_key = photo.key; profileData.profile_image_url = photo.image_url; }" @busy="value => photoBusy = value" />
               <div
                 v-if="profileData.profile_image_url"
                 class="w-48 h-48 mx-auto rounded-full overflow-hidden bg-primary-700 border-4 border-secondary-800/20"
@@ -131,6 +123,7 @@
             <div class="pt-4">
               <button
                 @click="updateCoachProfile"
+          :disabled="photoBusy"
                 class="w-full px-8 py-4 bg-secondary-800 text-primary-900 text-lg font-medium rounded-lg hover:bg-secondary-700 active:bg-secondary-600 focus:outline-none focus:ring-4 focus:ring-secondary-800/30 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
                 儲存
@@ -144,6 +137,7 @@
 </template>
 
 <script setup>
+import CoachPhotoUpload from "../../components/CoachPhotoUpload.vue";
 import { ref, onMounted, getCurrentInstance } from "vue";
 import { getCoach, getSkills, putCoach } from "../../api/index.js";
 import { storeToRefs } from "pinia";
@@ -153,7 +147,9 @@ import swalHandler from "../../utils/swalHandler.js";
 const { proxy } = getCurrentInstance();
 const { name } = storeToRefs(useUserStore());
 
+const photoBusy = ref(false);
 const profileData = ref({
+  profile_image_key: null,
   id: "",
   profile_image_url: "",
   experience_years: 0,
@@ -206,13 +202,13 @@ function functionToggleSkill(skillId) {
 }
 
 function handleImageError() {
-  swalHandler(proxy.$swal, "圖片載入失敗，請檢查網址是否正確");
+  swalHandler(proxy.$swal, "照片載入失敗，請重新整理頁面");
 }
 
 // 儲存教練資料
 async function updateCoachProfile() {
   try {
-    const { status, data } = await putCoach(profileData.value);
+    const { status, data } = await putCoach({ ...profileData.value, profile_image_url: profileData.value.profile_image_key ? null : profileData.value.profile_image_url });
     if (status === "success") {
       profileData.value = data;
       swalHandler(proxy.$swal, "資料已更新");

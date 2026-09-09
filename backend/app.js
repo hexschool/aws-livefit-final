@@ -16,20 +16,18 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: false }))
-app.use(pinoHttp({
-  logger,
-  serializers: {
-    req (req) {
-      req.body = req.raw.body
-      return req
-    }
-  }
-}))
+app.use(pinoHttp({ logger }))
 app.use(express.static(path.join(__dirname, 'public')))
 
 app.get('/healthcheck', (req, res) => {
   res.status(200)
   res.send('OK')
+})
+app.get('/ready', async (req, res) => {
+  try {
+    await require('./db/data-source').dataSource.query('SELECT 1')
+    res.json({ status: 'ready' })
+  } catch { res.status(503).json({ status: 'unavailable' }) }
 })
 app.use('/api/credit-package', creditPackageRouter)
 app.use('/api/coaches/skill', skillRouter)
@@ -38,6 +36,12 @@ app.use('/api/admin', adminRouter)
 app.use('/api/coaches', coachRouter)
 app.use('/api/courses', coursesRouter)
 app.use('/api/upload', uploadRouter)
+
+// 同一映像附帶既有前端，保留 W10 單一 LiveFit Container。
+app.use('/api', (req, res) => res.status(404).json({ status: 'failed', message: 'API 不存在' }))
+app.get('*', (req, res, next) => {
+  res.sendFile(path.join(__dirname, 'public/index.html'), error => { if (error) next(error) })
+})
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

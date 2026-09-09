@@ -1,3 +1,4 @@
+const photos = require('../services/photos')
 const dayjs = require('dayjs')
 const utc = require('dayjs/plugin/utc')
 
@@ -364,6 +365,8 @@ class AdminController {
   static async postCoach (req, res, next) {
     try {
       const { userId } = req.params
+      const profileImageKey = req.body.profile_image_key || null
+      if (profileImageKey) await photos.validatePhoto(profileImageKey, req.user.id)
       const { experience_years: experienceYears, description, profile_image_url: profileImageUrl = null } = req.body
       if (isUndefined(experienceYears) || isNotValidInteger(experienceYears) || isUndefined(description) || isNotValidSting(description)) {
         logger.warn('欄位未填寫正確')
@@ -373,7 +376,7 @@ class AdminController {
         })
         return
       }
-      if (profileImageUrl && !isNotValidSting(profileImageUrl) && !profileImageUrl.startsWith('https')) {
+      if (!profileImageKey && profileImageUrl && !isNotValidSting(profileImageUrl) && !profileImageUrl.startsWith('https')) {
         logger.warn('大頭貼網址錯誤')
         res.status(400).json({
           status: 'failed',
@@ -406,7 +409,8 @@ class AdminController {
         user_id: userId,
         experience_years: experienceYears,
         description,
-        profile_image_url: profileImageUrl
+        profile_image_key: profileImageKey,
+        profile_image_url: profileImageKey ? null : profileImageUrl
       })
       const updatedUser = await userRepository.update({
         id: userId,
@@ -443,6 +447,8 @@ class AdminController {
   static async putCoachProfile (req, res, next) {
     try {
       const { id } = req.user
+      const profileImageKey = req.body.profile_image_key || null
+      if (profileImageKey) await photos.validatePhoto(profileImageKey, id)
       const {
         experience_years: experienceYears,
         description,
@@ -451,8 +457,8 @@ class AdminController {
       } = req.body
       if (isUndefined(experienceYears) || isNotValidInteger(experienceYears) ||
         isUndefined(description) || isNotValidSting(description) ||
-        isUndefined(profileImageUrl) || isNotValidSting(profileImageUrl) ||
-        !profileImageUrl.startsWith('https') ||
+        (!profileImageKey && (isUndefined(profileImageUrl) || isNotValidSting(profileImageUrl) ||
+        !profileImageUrl.startsWith('https'))) ||
         isUndefined(skillIds) || !Array.isArray(skillIds)) {
         logger.warn('欄位未填寫正確')
         res.status(400).json({
@@ -479,7 +485,8 @@ class AdminController {
       }, {
         experience_years: experienceYears,
         description,
-        profile_image_url: profileImageUrl
+        profile_image_key: profileImageKey,
+        profile_image_url: profileImageKey ? null : profileImageUrl
       })
       const coachLinkSkillRepo = dataSource.getRepository('CoachLinkSkill')
       const newCoachLinkSkill = skillIds.map(skill => ({
@@ -495,6 +502,7 @@ class AdminController {
           id: true,
           experience_years: true,
           description: true,
+          profile_image_key: true,
           profile_image_url: true,
           CoachLinkSkill: {
             skill_id: true
@@ -512,7 +520,8 @@ class AdminController {
           id: result[0].id,
           experience_years: result[0].experience_years,
           description: result[0].description,
-          profile_image_url: result[0].profile_image_url,
+          profile_image_key: result[0].profile_image_key,
+          profile_image_url: await photos.imageUrl(result[0].profile_image_key, result[0].profile_image_url),
           skill_ids: result[0].CoachLinkSkill.map(skill => skill.skill_id)
         }
       })
@@ -527,7 +536,7 @@ class AdminController {
       const { id } = req.user
       const coachRepo = dataSource.getRepository('Coach')
       const coach = await coachRepo.findOne({
-        select: ['id', 'experience_years', 'description', 'profile_image_url'],
+        select: ['id', 'experience_years', 'description', 'profile_image_key', 'profile_image_url'],
         where: { user_id: id }
       })
       const coachSkill = await dataSource.getRepository('CoachLinkSkill').find({
@@ -543,7 +552,8 @@ class AdminController {
           id: coach.id,
           experience_years: coach.experience_years,
           description: coach.description,
-          profile_image_url: coach.profile_image_url,
+          profile_image_key: coach.profile_image_key,
+          profile_image_url: await photos.imageUrl(coach.profile_image_key, coach.profile_image_url),
           skill_ids: coachSkill.length > 0 ? coachSkill.map(({ skill_id: skillId }) => skillId) : []
         }
       })

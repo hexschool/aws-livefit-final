@@ -13,5 +13,6 @@ const auth = require('../middlewares/auth')({
 const router = express.Router()
 
 router.post('/', auth, uploadController.postUploadImage)
+router.post('/confirm', auth, uploadController.confirmUpload)
 
 module.exports = router

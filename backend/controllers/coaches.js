@@ -1,3 +1,4 @@
+const photos = require('../services/photos')
 const { MoreThan } = require('typeorm')
 const { dataSource } = require('../db/data-source')
 const logger = require('../utils/logger')('CoachesController')
@@ -78,6 +79,7 @@ class CoachesController {
           user_id: true,
           experience_years: true,
           description: true,
+          profile_image_key: true,
           profile_image_url: true,
           created_at: true,
           updated_at: true,
@@ -126,7 +128,7 @@ class CoachesController {
             user_id: coach.user_id,
             experience_years: coach.experience_years,
             description: coach.description,
-            profile_image_url: coach.profile_image_url,
+            profile_image_url: await photos.imageUrl(coach.profile_image_key, coach.profile_image_url),
             created_at: coach.created_at,
             updated_at: coach.updated_at,
             skills

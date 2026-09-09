@@ -1,11 +1,11 @@
 {
-  "name": "fitness-backend-final",
+  "name": "aws-livefit-final",
   "version": "1.0.0",
   "private": true,
-  "description": "健身房後端 API — 最終作業驗收包。前端、Swagger、測試都在這裡，後端最後搬進 backend/。",
+  "description": "LiveFit 已完成解答的 AWS 適配版；按 Notion 各週環節部署與驗證。",
   "scripts": {
     "start": "node .github/scripts/check-backend.js && npm --prefix backend start",
-    "test": "jest --runInBand",
+    "test": "npm run test:contracts",
     "test:m1": "jest test/m1.test.js --runInBand",
     "test:m2": "jest test/m2.test.js --runInBand",
     "test:m3": "jest test/m3.test.js --runInBand",
@@ -13,7 +13,8 @@
     "test:m5": "jest test/m5.test.js --runInBand",
     "test:m6": "jest test/m6.test.js --runInBand",
     "test:smoke": "jest test/smoke.test.js --runInBand",
-    "db:reset": "docker compose down -v && docker compose up -d"
+    "test:aws": "jest test/aws.test.js --runInBand",
+    "test:contracts": "jest test/smoke.test.js test/m[1-6].test.js --runInBand"
   },
   "jest": {
     "testEnvironment": "node",

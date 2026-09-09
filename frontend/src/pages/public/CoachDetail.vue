@@ -227,10 +227,14 @@ function closeConfirmWhetherToRegisterModal() {
 
 async function confirmRegistration(id) {
   try {
-    const { status } = await postCourse(id);
+    const { status, notification } = await postCourse(id);
 
     if (status === "success") {
-      redirectModalTable[status]();
+      if (notification?.status === "failed") {
+        openRedirectModal("報名成功，通知信寄送失敗；您仍可從課表查看報名。", "前往課程儀表板", "/user/dashboard");
+      } else {
+        redirectModalTable[status]();
+      }
     }
   } catch (error) {
     let msg = error.message;

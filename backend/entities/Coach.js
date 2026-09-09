@@ -22,6 +22,11 @@ module.exports = new EntitySchema({
       type: 'text',
       nullable: false
     },
+    profile_image_key: {
+      type: 'varchar',
+      length: 512,
+      nullable: true
+    },
     profile_image_url: {
       type: 'varchar',
       length: 2048,

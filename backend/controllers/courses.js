@@ -1,4 +1,5 @@
 const { IsNull, MoreThan, LessThanOrEqual } = require('typeorm')
+const { sendBookingNotification } = require('../services/notifications')
 const { dataSource } = require('../db/data-source')
 const logger = require('../utils/logger')('CoursesController')
 
@@ -114,9 +115,11 @@ class CoursesController {
         user_id: id,
         course_id: courseId
       })
-      await courseBookingRepo.save(newCourseBooking)
+      const savedBooking = await courseBookingRepo.save(newCourseBooking)
+      const notification = await sendBookingNotification(req.user, course, savedBooking.id)
       res.status(201).json({
         status: 'success',
+        notification,
         data: null
       })
     } catch (error) {

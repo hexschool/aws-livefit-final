@@ -1,11 +1,11 @@
 const pino = require('pino')
-const pretty = require('pino-pretty')
-
-module.exports = function getLogger (prefix, logLevel = 'debug') {
-  return pino(pretty({
-    level: logLevel,
-    messageFormat: `[${prefix}]: {msg}`,
-    colorize: true,
-    sync: true
-  }))
+module.exports = function getLogger (prefix) {
+  return pino({
+    name: prefix,
+    level: process.env.LOG_LEVEL || 'info',
+    redact: {
+      paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]', 'password', 'token'],
+      censor: '[REDACTED]'
+    }
+  })
 }

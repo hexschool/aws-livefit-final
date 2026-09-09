@@ -49,7 +49,7 @@ function notNeedAuth(url, method) {
 
 // 建立 axios 實例
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/",
   timeout: 10000, // 請求超時時間
 });
 

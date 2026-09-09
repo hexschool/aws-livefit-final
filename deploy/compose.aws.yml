@@ -1,0 +1,28 @@
+# W10：單一 LiveFit 容器；W11 的主機 Nginx 代理到本機 8080。
+name: aws-livefit
+services:
+  backend:
+    image: ${LIVEFIT_IMAGE:?請指定 ECR 完整映像名稱與固定 tag}
+    platform: linux/arm64
+    env_file:
+      - .env.aws
+    environment:
+      NODE_ENV: production
+      DB_SYNCHRONIZE: 'false'
+      DB_ENABLE_SSL: 'true'
+      DB_CA_CERT_PATH: /app/certs/global-bundle.pem
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./certs/global-bundle.pem:/app/certs/global-bundle.pem:ro
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:8080/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

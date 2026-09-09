@@ -1,8 +1,8 @@
 {
-  "name": "fitness-backend-final",
+  "name": "aws-livefit-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "健身房後端 API — 最終作業。前端是成品，後端由你打造。",
+  "description": "LiveFit AWS 完成版後端",
   "scripts": {
     "start": "node ./bin/www.js",
     "test": "jest --runInBand",
@@ -13,7 +13,8 @@
     "test:m5": "jest test/m5.test.js --runInBand",
     "test:m6": "jest test/m6.test.js --runInBand",
     "test:smoke": "jest test/smoke.test.js --runInBand",
-    "db:reset": "docker compose down -v && docker compose up -d"
+    "db:init": "node scripts/init-db.js",
+    "db:seed": "node scripts/seed.js"
   },
   "jest": {
     "testEnvironment": "node",
@@ -24,7 +25,10 @@
     "supertest": "^7.0.0"
   },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "@aws-sdk/client-s3": "^3.1128.0",
+    "@aws-sdk/client-ses": "^3.1128.0",
+    "@aws-sdk/s3-request-presigner": "^3.1128.0",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -41,5 +45,8 @@
     "pino-pretty": "^13.0.0",
     "reflect-metadata": "^0.2.1",
     "typeorm": "^0.3.20"
+  },
+  "overrides": {
+    "qs": "^6.15.4"
   }
 }

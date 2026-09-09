@@ -1,151 +1,29 @@
-name: 最終作業驗收
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-env:
-  PORT: 8080
-  DB_HOST: localhost
-  DB_PORT: 5432
-  DB_USERNAME: student
-  DB_PASSWORD: student666
-  DB_DATABASE: fitness
-  DB_SYNCHRONIZE: "true"
-  DB_ENABLE_SSL: "false"
-  JWT_SECRET: ci-only-secret-666
-  JWT_EXPIRES_DAY: 30d
-  LOG_LEVEL: warn
-
+name: AWS LiveFit local verification
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
-  contract:
-    name: 驗收
+  test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        milestone: [m1, m2, m3, m4, m5, m6]
-    services:
-      postgres:
-        image: postgres:16.4-alpine3.20
-        env:
-          POSTGRES_USER: student
-          POSTGRES_PASSWORD: student666
-          POSTGRES_DB: fitness
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U student -d fitness"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: package.json
-
-      - name: 安裝依賴
-        run: npm install
-
-      - name: 檢查 backend/ 已搬進 repo（正式繳交必備）
-        run: node .github/scripts/check-backend.js
-
-      - name: 安裝後端依賴
-        run: npm --prefix backend install
-
-      - name: 啟動你的後端（根目錄 npm start 會代理到 backend/start，公約①）
-        run: |
-          npm start > server.log 2>&1 &
-          echo "等待 server 就緒（公約④：GET /healthcheck 要在資料庫可用後回 200）"
-          for i in $(seq 1 30); do
-            if curl -sf "http://localhost:8080/healthcheck" > /dev/null; then
-              echo "✅ server 就緒"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "❌ 等了 60 秒 server 還沒就緒 — 下面是你的 server log："
-          cat server.log
-          exit 1
-
-      - name: 跑 ${{ matrix.milestone }} 合約測試
-        run: npx jest test/${{ matrix.milestone }}.test.js --runInBand --json --outputFile=jest-result.json
-
-      - name: 📊 驗收結果總表（看這裡就知道哪些對哪些沒對）
-        if: always()
-        run: node .github/scripts/summary.js "驗收 (${{ matrix.milestone }})" jest-result.json
-
-      - name: 測試失敗 → 印出 server log 幫你 debug
-        if: failure()
-        run: |
-          echo "========== server.log =========="
-          cat server.log || echo "(沒有 server.log)"
-
-  dockerize:
-    name: 壓軸：容器化驗收（W10）
-    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_BASE_URL: http://localhost:3080
     steps:
       - uses: actions/checkout@v4
-
-      - name: docker compose 起你的後端 + 資料庫（backend 服務，壓軸規則）
-        run: |
-          docker compose up -d --build backend postgres
-          echo "等待 backend 容器就緒"
-          for i in $(seq 1 45); do
-            if curl -sf "http://localhost:8080/healthcheck" > /dev/null; then
-              echo "✅ backend 容器就緒"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "❌ backend 容器 90 秒內沒就緒 — 看 logs："
-          docker compose logs backend
-          exit 1
-
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
-          cache-dependency-path: package.json
-
-      - name: 安裝依賴
-        run: npm install
-
-      - name: smoke 測試（容器裡的後端要跟本機開發時行為一致）
-        run: npx jest test/smoke.test.js --runInBand --json --outputFile=jest-result.json
-
-      - name: 📊 smoke 結果總表
-        if: always()
-        run: node .github/scripts/summary.js "壓軸 smoke（容器化）" jest-result.json
-
-      - name: 持久化檢查（資料要存在 PostgreSQL，重啟不能消失）
-        run: |
-          MARK="persist_check_$(date +%s)_$RANDOM"
-          echo "種一筆技能：$MARK"
-          curl -sf -X POST "http://localhost:8080/api/coaches/skill" \
-            -H "Content-Type: application/json" \
-            -d "{\"name\":\"$MARK\"}" > /dev/null
-          echo "重啟 backend 容器…"
-          docker compose restart backend
-          for i in $(seq 1 30); do
-            if curl -sf "http://localhost:8080/healthcheck" > /dev/null; then break; fi
-            sleep 2
-          done
-          echo "重啟後資料還在嗎？"
-          if curl -sf "http://localhost:8080/api/coaches/skill" | grep -q "$MARK"; then
-            echo "✅ 資料活過了重啟 — 你真的有用資料庫"
-            echo "| ✅ | 持久化檢查：重啟容器後資料還在（資料真的存進 PostgreSQL） |" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ 重啟後資料不見了 — 資料必須存進 PostgreSQL，不能放在程式記憶體裡"
-            echo "| ❌ | 持久化檢查：重啟容器後資料不見了 — 資料必須存進 PostgreSQL，不能放在程式記憶體裡 |" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
-      - name: 失敗 → 印出容器 logs
+      - run: npm ci
+      - run: npm --prefix backend ci
+      - name: Start local PostgreSQL and AWS emulator
+        run: docker compose up -d --build --wait
+      - run: node backend/scripts/init-local-aws.js
+      - run: npm run test:contracts
+      - run: npm run test:aws
+      - name: Show service logs on failure
         if: failure()
-        run: docker compose logs backend postgres || true
+        run: docker compose logs --tail 80 backend postgres
+      - name: Stop this test environment
+        if: always()
+        run: docker compose down

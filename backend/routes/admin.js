@@ -22,7 +22,12 @@ router.get('/coaches/courses/:courseId', auth, adminController.getCoachCourseDet
 
 router.put('/coaches/courses/:courseId', auth, adminController.putCoachCourseDetail)
 
-router.post('/coaches/:userId', adminController.postCoach)
+router.post('/coaches/:userId', auth, (req, res, next) => {
+  if (req.params.userId !== req.user.id) {
+    return res.status(403).json({ status: 'failed', message: '只能升級自己的教練帳號' })
+  }
+  next()
+}, adminController.postCoach)
 
 router.put('/coaches', auth, isCoach, adminController.putCoachProfile)
 

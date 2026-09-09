@@ -107,7 +107,7 @@ class UsersController {
         })
         return
       }
-      logger.info(`使用者資料: ${JSON.stringify(existingUser)}`)
+      logger.info({ event: 'login', userId: existingUser.id })
       const isMatch = await bcrypt.compare(password, existingUser.password)
       if (!isMatch) {
         res.status(400).json({

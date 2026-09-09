@@ -39,13 +39,22 @@ function onError (error) {
 }
 
 server.on('error', onError)
-server.listen(port, async () => {
+async function start () {
   try {
     await dataSource.initialize()
-    logger.info('資料庫連線成功')
-    logger.info(`伺服器運作中. port: ${port}`)
+    server.listen(port, () => logger.info({ port }, '伺服器與資料庫已就緒'))
   } catch (error) {
-    logger.error(`資料庫連線失敗: ${error.message}`)
+    logger.error({ errorCode: error.code }, '資料庫啟動失敗')
     process.exit(1)
   }
-})
+}
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.once(signal, () => {
+    server.close(async () => {
+      if (dataSource.isInitialized) await dataSource.destroy()
+      process.exit(0)
+    })
+    setTimeout(() => process.exit(1), 10000).unref()
+  })
+}
+start()

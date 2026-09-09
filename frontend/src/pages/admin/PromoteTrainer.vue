@@ -44,19 +44,7 @@
       <div v-if="!isCoach" class="mb-8">
         <div class="space-y-6">
           <div>
-            <label
-              for="profile_image"
-              class="block text-sm font-semibold text-primary-0 mb-2"
-            >
-              教練照片網址 <span class="text-secondary-800">*</span>
-            </label>
-            <input
-              id="profile_image"
-              v-model="formData.profile_image_url"
-              type="text"
-              placeholder="請輸入圖片網址 (例如：https://example.com/image.jpg)"
-              class="w-full px-4 py-2 border-2 border-primary-600 bg-primary-900 text-primary-0 rounded-lg outline-none focus:border-secondary-800 mb-3 placeholder:text-primary-400"
-            />
+            <CoachPhotoUpload @uploaded="photo => { formData.profile_image_key = photo.key; formData.profile_image_url = photo.image_url; }" @busy="value => photoBusy = value" />
             <div
               v-if="formData.profile_image_url"
               class="w-32 h-32 mx-auto rounded-full overflow-hidden bg-primary-700"
@@ -127,6 +115,7 @@
         <button
           v-if="!isCoach"
           @click="promoteToCoach"
+          :disabled="photoBusy"
           class="px-8 py-3 bg-gradient-to-r from-secondary-800 to-secondary-600 text-primary-900 text-lg font-semibold rounded-lg hover:shadow-lg hover:scale-105 transform transition-all duration-200"
         >
           立即升級為教練
@@ -151,6 +140,7 @@
 </template>
 
 <script setup>
+import CoachPhotoUpload from "../../components/CoachPhotoUpload.vue";
 import { ref, onMounted, getCurrentInstance } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -166,7 +156,9 @@ const { proxy } = getCurrentInstance();
 const router = useRouter();
 
 const isCoach = ref(false);
+const photoBusy = ref(false);
 const formData = ref({
+  profile_image_key: null,
   experience_years: 0,
   description: "",
   profile_image_url: "",
@@ -180,14 +172,14 @@ async function checkCoachStatus() {
 }
 
 function handleImageError() {
-  swalHandler(proxy.$swal, "圖片載入失敗，請檢查網址是否正確");
+  swalHandler(proxy.$swal, "照片載入失敗，請重新整理頁面");
 }
 
 async function promoteToCoach() {
   try {
     const { id } = jwtDecode(getDataFromCookieByKey("token"));
 
-    const { status } = await postPromoteUserToCoach(id, formData.value);
+    const { status } = await postPromoteUserToCoach(id, { ...formData.value, profile_image_url: formData.value.profile_image_key ? null : formData.value.profile_image_url });
 
     if (status === "success") {
       swalHandler(proxy.$swal, "升級教練成功");
