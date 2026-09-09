@@ -1,7 +1,7 @@
 # W12：沿用 Notion 的 Dashboard、Alarm、SNS 與 Agent
 
 來源：`weeks/12-cloudwatch/learn.md:757` 實務環節，以及 `:524` 收集策略。
-目前是準備範本；尚未建立 Dashboard、送出指標或觸發告警。
+目前是準備範本；尚未建立 Dashboard、送出指標或觸發告警。2026-09-09 檢查補上 retention_in_days=7，並改用本次專用 /livefit-final/nginx/access、/livefit-final/nginx/error；不套到其他既有 Log Group。
 
 - Dashboard：EC2 CPU／網路／磁碟、RDS CPU／網路／磁碟用 Line；RDS FreeableMemory 用 Gauge（上限填實際 DB 記憶體位元組）；DatabaseConnections 用 Number。
 - EC2 磁碟不能假定有 instance-store DiskReadBytes；本課 EBS 主機應使用 EBS VolumeReadBytes／VolumeWriteBytes，磁碟使用率由 Agent 的 disk_used_percent 提供。
@@ -23,3 +23,6 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a status
 ```
 
 App 的 stdout 保持 JSON，由 Docker json-file 保留（10 MB ×3）。課堂若要將 App 日誌送到 CloudWatch，先用 `docker inspect --format '{{.LogPath}}' <容器名稱>` 取得該容器的實際檔案，再在 Agent collect_list 加入該路徑，Log Group `/livefit/backend`。容器重建後路徑會改變，需重新確認與載入設定；不要把其他專案的所有容器一起收走。目前範本只直接收主機 Nginx 日誌。
+
+
+日誌保留依 [CloudWatch Agent 官方設定](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Agent-Configuration-File-Details.html)：新 Log Group 若省略 retention_in_days，預設不過期；範本明確填 7，需 logs:PutRetentionPolicy。套用前若同名群組已存在，先確認確實屬於本次專案，避免變更別人的保留期間。此修正只更新範本，尚未安裝 Agent 或更改雲端日誌。

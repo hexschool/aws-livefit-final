@@ -36,7 +36,7 @@
 - W12 CloudWatch Agent／Dashboard／Alarm／SNS 尚未建立驗收；已準備設定與存取範圍，等待使用者回覆。不得寫成已監控或已收到告警。
 - S3 在允許前綴以外用不存在物件測試，收到 NoSuchKey；這個探測不足以證明 IAM 拒絕，未記為通過。
 - 預簽名 URL 自然到期、RDS 還原、映像回復版本尚未實測。
-- W1 預算與費用需於教學前重新回查；不把講義 US$30 預算當成帳號實況已驗證。
+- W1 已於 2026-09-09 10:15 回查 aws-course-budget：Monthly US$30，Healthy；Actual >85%、Actual >100%、Forecasted >100% 三個門檻均未超過。仍未測試預算通知實際收信。
 - GitHub Actions 已於程式提交 734c176 通過合約與 AWS 模擬驗證，見下方版本交付紀錄；後續只有文件更新時不重跑同一批程式測試。
 - 尚未由克庭獨立部署，也未完成計時彩排／清除驗證，教材不得標 READY。
 
@@ -59,3 +59,13 @@
 - 本機 AWS Course Hub 新增「13. 最終作業」與六個分頁：本週概覽、老師先學、課程講義、老師提詞講稿、學生任務、克庭驗收；目前為 DRAFT，未推送／部署這批課程網站變更。
 - 課程 typecheck／Vite build 通過；實際瀏覽器從左側入口逐一點開六份文件，無 console error，窄視窗頁面無橫向溢出；原課程地圖保留十二週。
 - 2026-09-09 10:09（台北）再次讀取正式 HTTPS /ready，仍回 ready。
+
+
+## 追加 W1 查核（2026-09-09 10:15，台北）
+
+- Console → Budgets → aws-course-budget，Monthly Cost budget，自 2026-08-01 起；金額 US$30，Healthy。
+- September 2026 MTD 顯示 Actual US$1.09、Forecast US$4.33；這是該預算的當次快照，不是本次 LiveFit 的個別費用，也不代表本日新資源已完整計入。
+- Included filters=None；Excluded filters=Charge type: Credit, Refund。因此不能直接當成套用抵用金後的應付帳單。
+- 已有三個通知門檻：Actual >85%（US$25.50）、Actual >100%（US$30）、Forecasted >100%（US$30）；均 Not exceeded，未改設定／收件人，也未觸發通知。
+- IAM Role 重新讀回仍只有 LiveFitRuntimeAccess 一項 inline policy，未附加 CloudWatch 權限。
+- W12 Agent 範本補上專用 Log Group 與七天保留；JSON 可解析，尚未套用雲端。
