@@ -87,3 +87,14 @@
 - Jest `test:checker` 20 項通過：包括多 SG／ENI 合併、錯 SG／公開 SSH、main route fallback、錯 alarm dimension／period、權限不足不誤判、無 Policy 與 AccessDenied、report HTML escape、未 opt-in 零寫入、不同主機／DB／過期報告拒絕。
 - 自查使用方式已補到本機第 13 單元「學生任務／克庭驗收」；課程 build 通過，這批課程文件仍未發布 GitHub Pages。
 - 原始 HTML／JSON 報告保存在 ignored `artifacts/final-check-2026-09-09/`、`artifacts/final-flow-2026-09-09/` 與 `artifacts/host-2026-09-09.json`。個人設定與 tar 包也被 gitignore 排除，CI 只跑本機回歸，不會驗收或操作學生 AWS。
+
+
+## 最終作業自查交付版：不含監控（2026-09-09 12:00，台北）
+
+- 使用者決定「不要監控」：本版取消 CloudWatch／SNS、自查欄位與最終作業驗收要求；未建立相關資源，未修改既有 AWS 設定。W1 費用預算保留，原 W12 教材維持獨立。
+- checker 1.1.0 於 12:00 在東京 CloudShell 重跑真正 AWS 與 HTTPS：26 PASS、0 FAIL、0 BLOCKED、6 MANUAL。26 項包括彙整本次主機報告；SSH 主機報告於 11:58 執行，12 項通過。EC2、DB endpoint、Bucket／Region、實際映像 digest 均與 AWS 查詢一致。
+- 11:39 的網站實測仍為 4 PASS、0 FAIL、0 BLOCKED、1 MANUAL；移除監控未改功能測試步驟，沒有為更新版號重複新增測試資料。網站報告保留當時版本與時間。
+- 19 個 checker 回歸測試通過，包含不呼叫 CloudWatch／SNS 的驗證。提交 1e492c9f2f5cce2814238bf99df7230322170f78 已推到私密 repo；[CI run 34309238996](https://github.com/hexschool/aws-livefit-final/actions/runs/34309238996) 的 checker、合約、AWS 模擬測試均 success。CI 沒有操作真實 AWS。
+- 最新原始報告保存在 ignored artifacts/final-check-2026-09-09-v1.1.0/ 與 artifacts/host-2026-09-09-v1.1.0.json；原始 JSON 的 scriptSha256 已比對目前提交的腳本一致。初版含監控報告另留原路徑作歷史，不用作本版交件。
+- 本機第 13 單元六份文件同步移除監控要求，學生任務與克庭驗收附自查步驟；typecheck／Vite build 與瀏覽器學生任務入口通過。本批課程仍僅本機，未部署 Pages，維持 DRAFT。
+- 自查通過不代表最終作業全部通過：報名扣堂與通知實收、IAM 受控 Allow／Deny、重啟／還原、續期與設計說明仍依各報告人工項補證據。
