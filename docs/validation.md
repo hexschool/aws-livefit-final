@@ -37,7 +37,7 @@
 - S3 在允許前綴以外用不存在物件測試，收到 NoSuchKey；這個探測不足以證明 IAM 拒絕，未記為通過。
 - 預簽名 URL 自然到期、RDS 還原、映像回復版本尚未實測。
 - W1 預算與費用需於教學前重新回查；不把講義 US$30 預算當成帳號實況已驗證。
-- GitHub Actions 的遠端結果另看該次 workflow；上述 66＋8 是本機結果。
+- GitHub Actions 已於程式提交 734c176 通過合約與 AWS 模擬驗證，見下方版本交付紀錄；後續只有文件更新時不重跑同一批程式測試。
 - 尚未由克庭獨立部署，也未完成計時彩排／清除驗證，教材不得標 READY。
 
 ## 資源保留決策
@@ -48,3 +48,14 @@
 - 清除須在驗收與保留需求結束後，依實際資源清單逐項處理；關閉 EC2 不等於其餘資源停止計費。
 
 操作細節見 [瀏覽器與終端紀錄](browser-operations.md)。紀錄不含密碼、私鑰或預簽名 URL。
+
+
+## 版本交付與課程入口
+
+- 已建立 [hexschool/aws-livefit-final](https://github.com/hexschool/aws-livefit-final)，GitHub API 核對 isPrivate=true，預設分支 main。
+- 程式提交 734c1765e179769ffbae52be555c3dab286fa4e8 已推送；[GitHub Actions](https://github.com/hexschool/aws-livefit-final/actions/runs/34300991490) 的啟動本機環境、合約測試、AWS 模擬測試與清除步驟均 success。這個 CI 不會連線部署至 AWS。
+- 上傳前檢查 168 個工作檔候選與 253 個 Git 物件；未發現 AWS Access Key、私鑰、正式 DB／JWT 值或完整帳號識別碼。這是模式與已知秘密掃描，不宣稱能偵測所有類型機密。
+- .env.aws 與私鑰未追蹤，正式密碼未寫入紀錄或映像。
+- 本機 AWS Course Hub 新增「13. 最終作業」與六個分頁：本週概覽、老師先學、課程講義、老師提詞講稿、學生任務、克庭驗收；目前為 DRAFT，未推送／部署這批課程網站變更。
+- 課程 typecheck／Vite build 通過；實際瀏覽器從左側入口逐一點開六份文件，無 console error，窄視窗頁面無橫向溢出；原課程地圖保留十二週。
+- 2026-09-09 10:09（台北）再次讀取正式 HTTPS /ready，仍回 ready。

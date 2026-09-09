@@ -279,3 +279,13 @@
 - SES Console：Tokyo Sandbox／Healthy，當日發信使用量 1。IAM Console 開啟本次 Role 查看，尚未新增 CloudWatch 權限。
 - 已準備 monitoring-access-review.md，詢問 W12 指標／日誌／單一告警、SNS 收信與確認，以及一封真實報名通知；尚待回覆，不以其他新訊息視為批准。
 - 使用者要求課程左側增加「13. 最終作業」及六份分頁、改「克庭驗收」；另外明確要求 hexschool 私密 AWS 解答 repo。CLI 已建立 hexschool/aws-livefit-final（Private）；準備上傳前掃描工作檔與 Git 歷史，未命中 AWS Key、私鑰、正式 DB／JWT 秘密或完整帳號識別碼。程式與教材進度另記後續紀錄。
+
+
+### B037｜2026-09-09T10:09:14+08:00｜私密解答 repo 與最終作業教材
+- GitHub CLI：建立 hexschool/aws-livefit-final，Private；新增 origin，將程式提交 734c176 推送 main。再讀回 isPrivate=true／defaultBranch=main；GitHub Actions run 34300991490 的合約與 AWS 模擬測試通過。
+- 機密檢查：掃描待提交檔案與原 Git 歷史，不輸出秘密值；正式 .env.aws／SSH key 不進 Git。保留原前端 CRLF 換行，不為 whitespace 警示改寫整批既有檔案。
+- 本機課程程式：保留十二週課程地圖，增加 13 最終作業的六份 Markdown；共用驗收分頁改名克庭驗收。老師先學／講義包含實際改造、Console 欄位、部署命令、排錯與 W1～W12 對應；學生任務以自己的 URL、版本、設定與功能證據提交。
+- 瀏覽器：沿用 in-app 本機課程分頁。窄視窗左側選單原先收合，先展開再點 13 最終作業，路由成功；依序點自學／講義／講稿／任務／驗收，六份都能讀取，Console 無 error。
+- 視覺檢查：預設 366px 視窗，頁寬與 viewport 同為 366，分頁採橫向捲動；未額外改尺寸。檢查原 course-map 仍為 W1～W12。
+- 終端：課程 typecheck／Vite build 通過，Markdown 連結與 code fence 檢查通過；正式 HTTPS /ready 再次回 ready。
+- 狀態：新私密解答已推送；本次課程變更留本機，未發布 GitHub Pages。W12 權限／SNS 與額外報名通知仍待先前詢問回覆，未新增雲端監控、未再寄信；示範 EC2 持續 Running。
