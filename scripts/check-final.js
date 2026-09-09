@@ -9,8 +9,8 @@ const dns = require('node:dns').promises
 const http = require('node:http')
 const https = require('node:https')
 const exec = promisify(execFile)
-const VERSION = '1.2.0'
-const LABELS = { PASS: '通過', FAIL: '需修正', BLOCKED: '無法檢查', MANUAL: '待人工驗證' }
+const VERSION = '1.2.1'
+const LABELS = { PASS: '通過', FAIL: '需修正', BLOCKED: '無法檢查' }
 const WEEKS = ['01-account-and-cost', '02-iam', '03-vpc', '04-vpc-security', '05-ec2', '06-s3', '07-rds', '08-ses', '09-ecr', '10-container-deploy', '11-nginx-https']
 const READS = new Set([
   'sts/get-caller-identity', 'ec2/describe-instances', 'ec2/describe-addresses',
@@ -125,12 +125,7 @@ function makeReporter (onResult = () => {}) {
     if (status === 'BLOCKED') row.fix = nextStep || '先確認 AWS 登入、查詢權限及網路，再重跑；不要為通過檢查而擴大 EC2 執行角色。原檢查：' + fix
     checks.push(row); onResult(row)
   }
-  function manual (id, week, title, expected, fix) {
-    const row = { id, week: `W${week}`, title, status: 'MANUAL', expected, actual: '本腳本未驗證。', fix,
-      lesson: `https://gonsakon.github.io/aws-course-hub/#/weeks/${WEEKS[week - 1]}/learn` }
-    checks.push(row); onResult(row)
-  }
-  return { checks, check, manual }
+  return { checks, check }
 }
 async function runChecks (c, deps = {}) {
   const aws = deps.aws || makeAws(c, deps.profile)
@@ -281,21 +276,14 @@ async function runChecks (c, deps = {}) {
       const all = ids.every(id => h.checks?.filter(x => x.id === id).length === 1 && h.checks.find(x => x.id === id).status === 'PASS')
       return { ok: Boolean(match && all), actual: `同組資源／映像=${Boolean(match)}；主機 ${ids.length} 項全通過=${all}；未通過=${(h.checks || []).filter(x => x.status !== 'PASS').map(x => x.id).join(', ') || '無'}；報告為學生自查證據，仍需克庭抽查。` }
     })
-  } else r.manual('manual.runtime', 10, '主機內 Compose／環境與版本對照', 'deployer、Healthy、單容器、127.0.0.1:8080、DB TLS、執行 digest 對上 ECR', '使用 docs/final-check.md 的主機檢查命令，再以 --host-report 加入同次報告。')
-  if (c.discoveryMode) r.manual('manual.ssh-owner', 4, 'SSH 來源是自己的電腦', '22 限制的單一 /32 與自己電腦的公開 IP 一致', 'CloudShell 的來源 IP 無法代表自己的電腦；現場 SSH 成功並核對 My IP。')
-  r.manual('manual.permissions', 2, '實際 IAM Allow／Deny', '以 EC2 Role 正確資源證明 pull 成功、push 拒絕', '依 W2／W9／W10 提供受控實測。User 查得到設定不代表 EC2 Role 有權限。')
-  r.manual('manual.flow', 10, '網站功能與 S3 照片', '註冊登入、照片上傳並重登讀回、建立課程、模擬購買', '可用 npm run check:flow -- --config deploy/check-final.local.json --allow-test-data；會建立專用測試資料，詳見操作文件。')
-  r.manual('manual.mail', 8, '報名、堂數與通知實收', '報名記錄與扣堂正確，SES accepted 與實際信箱收到分開留證', '使用自己已驗證且同意收信的信箱現場操作；不要將 accepted 當成實收。老師端仍待補整合驗證。')
-  r.manual('manual.persistence', 7, '重啟保存與還原', '重啟 app 後資料與照片仍在；備份存在與還原成功分開記錄', '依驗收時段手動重啟及留證；腳本不重啟、不停機、不做還原。')
-  r.manual('manual.renewal', 11, 'HTTPS 續期維護', 'certbot renew --dry-run 通過且 timer active', '依 W11 手動執行並留證；有效的現行憑證不能證明續期成功。')
-  r.manual('manual.explanation', 1, '設計解釋、費用與保留決定', '依最終作業四題用自己的話說明，附保留／清除時間', '自查報告是可修改的證據，克庭仍須抽查同一資源與版本；不據此自動評分。')
+  }
   return { version: VERSION, checkedAt: now.toISOString(), target: { url: c.url, region: c.region, instanceId: c.instanceId, dbInstanceIdentifier: c.dbInstanceIdentifier, repository: c.repository, imageTag: c.imageTag }, checks: r.checks }
 }
 function totals (report) { return Object.fromEntries(Object.keys(LABELS).map(s => [s, report.checks.filter(x => x.status === s).length])) }
 function exitCode (report) { const t = totals(report); return t.FAIL ? 1 : t.BLOCKED ? 2 : 0 }
 function renderHtml (report) {
   const escape = s => String(s ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]))
-  return `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LiveFit 最終作業自查</title><style>body{font:16px/1.7 system-ui,sans-serif;background:#f5f7fa;color:#17283a;margin:0;padding:24px}main{max-width:960px;margin:auto}h1{font-size:28px}article{background:white;border:1px solid #d7e0e9;border-left:5px solid #65758b;padding:18px;margin:16px 0;border-radius:8px;overflow-wrap:anywhere}article.PASS{border-left-color:#24804c}article.FAIL{border-left-color:#bc3535}article.BLOCKED{border-left-color:#b47700}h2{font-size:19px;margin:0}p{margin:8px 0}.meta{font-size:14px;color:#496078}.counts{display:flex;flex-wrap:wrap;gap:12px}.counts span{padding:8px 14px;background:#e4ebf2;border-radius:6px}a{color:#176087}@media print{body{padding:0;background:white}article{break-inside:avoid}}</style><main><h1>LiveFit 最終作業自查報告</h1><p>這是部署快照，供學生修正與克庭抽查；不是完整合格證明。權限不足會列「無法檢查」。本版不含監控；報名通知實收等人工項仍須補證據。</p><p class="meta">時間 ${escape(report.checkedAt)} · checker ${escape(report.version)}<br>網站 ${escape(report.target.url)}<br>EC2 ${escape(report.target.instanceId)} · ${escape(report.target.region)}<br>程式 SHA-256 ${escape(report.scriptSha256 || '')}</p><div class="counts">${Object.entries(totals(report)).map(([k, v]) => `<span>${LABELS[k]} ${v}</span>`).join('')}</div>${report.checks.map(x => `<article class="${x.status}"><h2>${LABELS[x.status]} · ${escape(x.week)} ${escape(x.title)}</h2><p class="meta">${escape(x.id)}</p><p><b>預期：</b>${escape(x.expected)}</p><p><b>實際：</b>${escape(x.actual)}</p>${x.status === 'PASS' ? '' : `<p><b>下一步：</b>${escape(x.fix)}</p>`}<a href="${escape(x.lesson)}">對照講義</a></article>`).join('')}</main></html>`
+  return `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LiveFit 最終作業自查</title><style>body{font:16px/1.7 system-ui,sans-serif;background:#f5f7fa;color:#17283a;margin:0;padding:24px}main{max-width:960px;margin:auto}h1{font-size:28px}article{background:white;border:1px solid #d7e0e9;border-left:5px solid #65758b;padding:18px;margin:16px 0;border-radius:8px;overflow-wrap:anywhere}article.PASS{border-left-color:#24804c}article.FAIL{border-left-color:#bc3535}article.BLOCKED{border-left-color:#b47700}h2{font-size:19px;margin:0}p{margin:8px 0}.meta{font-size:14px;color:#496078}.counts{display:flex;flex-wrap:wrap;gap:12px}.counts span{padding:8px 14px;background:#e4ebf2;border-radius:6px}a{color:#176087}@media print{body{padding:0;background:white}article{break-inside:avoid}}</style><main><h1>LiveFit 最終作業自查報告</h1><p>本報告只列本次實際執行的檢查。權限不足會列「無法檢查」。</p><p class="meta">時間 ${escape(report.checkedAt)} · checker ${escape(report.version)}<br>網站 ${escape(report.target.url)}<br>EC2 ${escape(report.target.instanceId)} · ${escape(report.target.region)}<br>程式 SHA-256 ${escape(report.scriptSha256 || '')}</p><div class="counts">${Object.entries(totals(report)).map(([k, v]) => `<span>${LABELS[k]} ${v}</span>`).join('')}</div>${report.checks.map(x => `<article class="${x.status}"><h2>${LABELS[x.status]} · ${escape(x.week)} ${escape(x.title)}</h2><p class="meta">${escape(x.id)}</p><p><b>預期：</b>${escape(x.expected)}</p><p><b>實際：</b>${escape(x.actual)}</p>${x.status === 'PASS' ? '' : `<p><b>下一步：</b>${escape(x.fix)}</p>`}<a href="${escape(x.lesson)}">對照講義</a></article>`).join('')}</main></html>`
 }
 function parseArgs (args) {
   const result = {}
@@ -334,7 +322,7 @@ async function main () {
   if (discovery && Object.keys(discovery.issues).length === 0) fs.writeFileSync(path.join(out, 'resources.local.json'), JSON.stringify(c, null, 2) + '\n', { mode: 0o600 })
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n', { mode: 0o600 })
   fs.writeFileSync(path.join(out, 'report.html'), renderHtml(report), { mode: 0o600 })
-  console.log(`\n${Object.entries(totals(report)).map(([s, n]) => `${LABELS[s]} ${n}`).join(' / ')}\n報告：${out}/report.html\n退出碼 0 也不代表人工項已完成。`)
+  console.log(`\n${Object.entries(totals(report)).map(([s, n]) => `${LABELS[s]} ${n}`).join(' / ')}\n報告：${out}/report.html`)
   process.exitCode = exitCode(report)
 }
 module.exports = { VERSION, READS, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }

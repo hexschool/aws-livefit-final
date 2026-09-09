@@ -326,3 +326,11 @@
 - 最後自動辨識沒有待確認欄位，不需手填或選擇；25 PASS／0 FAIL／0 BLOCKED／8 MANUAL。全程唯讀 AWS／網站，未改 Role、未新增監控或測試會員、未寄信／重啟。
 - 原始報告透過可見 CloudShell 終端分段讀回，保存 JSON 與本機 HTML；比對兩個程式的 SHA-256。沒有匯出 AWS credentials 或自動產生的資源設定。
 - 本機課程瀏覽器重新載入學生任務，已顯示 npm run check:final -- https://你的網站，舊必填 JSON 步驟不再出現。
+
+
+### B042｜2026-09-09｜結果截圖與學生交件方式
+- 使用者要求截取「輸入指令後的實際終端」，沿用東京 CloudShell 清除顯示，再以單一網址重跑；關閉舊上傳提示，僅擷取終端區域，避開 AWS 帳號抬頭。初次結果含 8 項人工提示。
+- 使用者圈選人工清單表示不需要，移除終端／HTML／JSON 的人工項與計數；只保留實際執行的 PASS／FAIL／BLOCKED。未更改 AWS 設定或把未執行事項改成通過。
+- CloudShell Actions → Upload file，上傳 livefit-url-check-v121.tar.gz，讀回成功後解壓；再次只輸入網址實測：25 PASS／0 FAIL／0 BLOCKED，已無人工清單。未重跑會建立會員的網站功能測試。
+- 擷取新版終端畫面，存入本機課程 weeks/13-final-project/assets/self-check-result.png，附於「截圖一：自查結果」。學生自查只需截到指令、自己網址與最後統計；HTML／JSON 改為排查需要時再提供。
+- 27 個自查回歸測試通過；本次課程頁面仍留本機。

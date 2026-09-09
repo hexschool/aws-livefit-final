@@ -1,4 +1,4 @@
-const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, exitCode, renderHtml, parseArgs, scrub, READS } = require('../scripts/check-final')
+const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS } = require('../scripts/check-final')
 const { runFlow } = require('../scripts/check-flow')
 const { discover, roleResources, validateUrl } = require('../scripts/discover-final')
 const c = { url: 'https://class.example.com', region: 'ap-northeast-1', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
@@ -47,13 +47,13 @@ test('AccessDenied、找不到與 timeout 區分，錯誤不外洩 ARN', () => {
   expect(commandError({ stderr: 'An error occurred (NoSuchBucket) when calling X' }).status).toBe('FAIL')
   expect(commandError({ killed: true }).code).toBe('Timeout')
 })
-test('報告不把 missing response 當 PASS；人工項不表示已合格', async () => {
+test('報告不把 missing response 當 PASS；空報告沒有通過項目', async () => {
   const r = makeReporter()
   await r.check('a', 1, 'A', 'x', 'y', async () => undefined)
   expect(r.checks[0].status).toBe('BLOCKED')
   expect(exitCode({ checks: r.checks })).toBe(2)
   expect(exitCode({ checks: [{ status: 'FAIL' }, ...r.checks] })).toBe(1)
-  expect(exitCode({ checks: [{ status: 'MANUAL' }] })).toBe(0)
+  expect(totals({ checks: [] })).toEqual({ PASS: 0, FAIL: 0, BLOCKED: 0 })
 })
 test('權限不足仍完成其他可檢項，所有網站 request 是只讀', async () => {
   const calls = []
@@ -65,7 +65,8 @@ test('權限不足仍完成其他可檢項，所有網站 request 是只讀', as
   expect(report.checks.filter(x => x.status === 'PASS')).toHaveLength(5)
   expect(report.checks.find(x => x.id === 'network.web-sg').status).toBe('BLOCKED')
   expect(report.checks.find(x => x.id === 'ecr.image').status).toBe('BLOCKED')
-  expect(report.checks.some(x => x.id === 'manual.mail' && x.status === 'MANUAL')).toBe(true)
+  expect(report.checks).toHaveLength(25)
+  expect(report.checks.every(x => ['PASS', 'FAIL', 'BLOCKED'].includes(x.status))).toBe(true)
   expect(calls.every(([, options]) => options === undefined)).toBe(true)
 })
 test('AWS 沒有 Bucket Policy 與讀不到 Policy 必須分開', async () => {
@@ -82,7 +83,8 @@ test('查詢錯誤與 HTML 報告不洩漏帳號／Email／簽名參數，HTML �
   expect(scrub(raw)).not.toMatch(/123456789012|student@|secret/)
   const html = renderHtml({ version: '1', checkedAt: 'now', target: { url: '<script>alert(1)</script>' }, checks: [] })
   expect(html).not.toContain('<script>')
-  expect(html).toContain('不是完整合格證明')
+  expect(html).toContain('只列本次實際執行的檢查')
+  expect(html).not.toContain('待人工驗證')
 })
 test('AWS CLI 只列明確只讀 operation，不包含寫入、寄信、憑證取得', () => {
   expect([...READS].every(x => /\/(get|describe|list|head)-/.test(x))).toBe(true)
@@ -97,6 +99,8 @@ test('業務流程未 opt-in 時零 request；前置失敗不接著製造資料'
   expect(report.checks.find(x => x.id === 'flow.accounts').status).toBe('FAIL')
   expect(report.checks.find(x => x.id === 'flow.photo').status).toBe('BLOCKED')
   expect(request.mock.calls.every(([, opt]) => opt.method === 'GET')).toBe(true)
+  expect(report.checks).toHaveLength(4)
+  expect(report.checks.every(x => ['PASS', 'FAIL', 'BLOCKED'].includes(x.status))).toBe(true)
 })
 test.each(['valid', 'other-instance', 'other-db', 'stale'])('主機與 ECR／RDS 證據必須匹配：%s', async variant => {
   const digest = 'sha256:' + 'a'.repeat(64)
@@ -219,5 +223,6 @@ test('未辨識資源不發無範圍查詢，SSH 自動模式不宣稱來源就�
   const report = await runChecks({ ...c, discoveryMode: true, bucket: undefined }, { aws, discoveryIssues: { bucket: '有兩個 Bucket，請選擇' }, request: async () => ({ status: 503, headers: {}, text: '' }) })
   expect(aws.mock.calls.some(([s]) => s === 's3api')).toBe(false)
   expect(report.checks.find(x => x.id === 's3.block')).toMatchObject({ status: 'BLOCKED', fix: '有兩個 Bucket，請選擇' })
-  expect(report.checks.find(x => x.id === 'manual.ssh-owner').status).toBe('MANUAL')
+  expect(report.checks.find(x => x.id === 'network.web-sg').expected).toContain('該 IP 是否為自己的電腦另行確認')
+  expect(report.checks.some(x => x.id.startsWith('manual.'))).toBe(false)
 })

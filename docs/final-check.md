@@ -35,7 +35,7 @@ node scripts/check-final.js https://你的網站
 
 之後只要重新執行最後一行，改自己的網址即可。這個打包檔只有程式，沒有設定表或憑證。
 
-每項會即時輸出，通常數分鐘內完成；AWS 網路、權限及分頁數會影響時間。單一項目失敗會繼續檢查其餘項目。
+終端、HTML 與 JSON 只列實際執行的檢查，不附「待人工驗證」清單。每項會即時輸出，通常數分鐘內完成；AWS 網路、權限及分頁數會影響時間。單一項目失敗會繼續檢查其餘項目。
 
 報告：`artifacts/final-check/report.html` 與 `report.json`。CloudShell 用 Actions → Download file，填完整路徑 `/home/cloudshell-user/livefit-selfcheck/artifacts/final-check/report.html` 下載。學生先下載 HTML 查看結果；JSON 留作克庭需要時的詳細核對。
 
@@ -44,9 +44,8 @@ node scripts/check-final.js https://你的網站
 | 通過 | 當次取得的證據符合該項標準 | 保留同次報告及版本 |
 | 需修正 | 取得明確反例、指定資源不存在、或網站行為錯誤 | 依報告的預期、實際、修正方向重做 |
 | 無法檢查 | AccessDenied、登入過期、查詢 timeout 或前置證據不足 | 先處理登入／查詢權限，不要把它當成部署已通過或設定錯誤 |
-| 待人工驗證 | 這個腳本沒有證明的事 | 補錄影、截圖或與克庭現場操作 |
 
-退出碼：`0`＝自動檢查沒有失敗或阻擋，**人工項仍可能未完成**；`1`＝至少一項需修正；`2`＝沒有明確需修正，但有權限／執行阻擋，或命令設定不完整。若同時有需修正與阻擋，回 `1`，兩種原因都保留在報告。
+退出碼：`0`＝自動檢查沒有失敗或阻擋，只代表本次已執行的項目；`1`＝至少一項需修正；`2`＝沒有明確需修正，但有權限／執行阻擋，或命令設定不完整。若同時有需修正與阻擋，回 `1`，兩種原因都保留在報告。
 
 依 2026-09-09 老師決定，本版最終作業不包含 CloudWatch／SNS 監控，腳本也不呼叫相關 API 或要求監控資源欄位。W1 的費用預算保留。
 
@@ -68,7 +67,7 @@ npm run check:final -- https://你的網站 \
 
 主機檢查包含 Ubuntu 24.04 ARM、deployer／Docker 群組、單一 backend、Healthy、僅綁 127.0.0.1:8080、重啟政策、容器 node 使用者、ARM64 映像、環境檔 600、無固定 AWS key 環境變數、synchronize=false、DB 憑證驗證與一次 `BEGIN READ ONLY` SQL TLS 查詢、Nginx 與 Certbot timer。
 
-合併時要求同一 EC2、30 分鐘內的報告，再用 AWS 資料核對正在執行的 digest、RDS endpoint、S3 Bucket／Region。沒有主機報告就保留「待人工驗證」，不會猜測已通過。
+合併時要求同一 EC2、30 分鐘內的報告，再用 AWS 資料核對正在執行的 digest、RDS endpoint、S3 Bucket／Region。未提供主機報告時，結果不列主機內部項目。
 
 要在 CloudShell 合併：把 `artifacts/host.json` 加入上面的 tar 命令，一起上傳，然後加 `--host-report artifacts/host.json`。主機報告只有資源名稱、布林與狀態，沒有環境檔內容或 token；仍屬私密交件，不隨 repo 推送。
 
@@ -93,8 +92,8 @@ npm run check:flow -- --config artifacts/final-check/resources.local.json --allo
 ## 5. 繳交給克庭
 
 - 自己的 HTTPS URL、repo commit、ECR tag／digest。
-- 同一次設定報告 HTML＋JSON；有主機報告也一併附上。
-- 功能報告 HTML＋JSON，及人工驗證項目的證據連結。
+- **截圖一：自查結果**。終端畫面包含執行指令、自己的 HTTPS 網址與最後的「通過／需修正／無法檢查」統計。
+- 自查只需這張截圖；HTML／JSON 留在自己電腦，克庭需要排查時再提供。其他功能驗收依學生任務安排。
 - 列出「需修正／無法檢查」尚未解決的原因與資源保留時段。
 
 報告內有時間與腳本 SHA-256 供版本對照，**不是簽章，也不能防止學生修改報告**。克庭應抽查同一網址、同一資源、同一版本；不能只靠全綠畫面判定完成。

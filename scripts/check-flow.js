@@ -75,7 +75,6 @@ async function runFlow (c, { allowTestData = false, request: send = request, onR
     const x = await api('GET', '/api/users/credit-package', null, user.member.token)
     return { ok: x.data?.length === 1 && Number(x.data[0].purchased_credits) === Number(pkg.credit_amount), actual: `查到 ${x.data?.length || 0} 筆購買；預期堂數=${pkg.credit_amount}；未報名、未扣堂、未寄信。` }
   })
-  r.manual('flow.booking-manual', 8, '報名扣堂與 SES 通知', '用自己已驗證且同意收信的 Email 報名，核對堂數、通知 status 與信箱實收', '本腳本不呼叫報名 API；example.invalid 測試帳號不可拿來測 SES 寄信。依學生任務 B4 手動驗證。')
   return { version: VERSION, checkedAt: new Date().toISOString(), target: { url: c.url, instanceId: c.instanceId, region: c.region }, created, checks: r.checks }
 }
 async function main () {
