@@ -1,4 +1,4 @@
-# W10：單一 LiveFit 容器；W11 的主機 Nginx 代理到本機 8080。
+# 單一 LiveFit 容器；主機 Nginx 代理到本機 8080。
 name: aws-livefit
 services:
   backend:

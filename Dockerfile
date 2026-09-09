@@ -1,4 +1,4 @@
-# W9 使用 linux/arm64 建置，對應 W5 Ubuntu ARM 主機。
+# 使用 linux/arm64 建置，部署至 Ubuntu ARM 主機。
 FROM node:24-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./

@@ -1,5 +1,5 @@
 const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS } = require('../scripts/check-final')
-const { runFlow } = require('../scripts/check-flow')
+const { runFlow } = require('../.github/scripts/check-flow')
 const { discover, roleResources, validateUrl } = require('../scripts/discover-final')
 const c = { url: 'https://class.example.com', region: 'ap-northeast-1', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
 const rule = (port, ip) => ({ IpProtocol: 'tcp', FromPort: port, ToPort: port, IpRanges: [{ CidrIp: ip }] })

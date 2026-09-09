@@ -3,7 +3,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { randomBytes, createHash } = require('node:crypto')
-const { request, validateConfig, makeReporter, totals, exitCode, renderHtml, VERSION } = require('./check-final')
+const { request, validateConfig, makeReporter, totals, exitCode, renderHtml, VERSION } = require('../../scripts/check-final')
 
 async function runFlow (c, { allowTestData = false, request: send = request, onResult } = {}) {
   if (!allowTestData) throw new Error('需要 --allow-test-data：會建立兩個會員、一張照片、一堂課及一筆模擬購買；不報名、不寄信、不清除資料。')
@@ -82,7 +82,7 @@ async function main () {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--allow-test-data') opt.allowTestData = true
     else if (['--config', '--out'].includes(args[i]) && args[i + 1]) opt[args[i++].slice(2)] = args[i]
-    else throw new Error('使用：node scripts/check-flow.js --config deploy/check-final.local.json --allow-test-data [--out artifacts/final-flow]')
+    else throw new Error('使用：node .github/scripts/check-flow.js --config artifacts/final-check/resources.local.json --allow-test-data [--out artifacts/final-flow]')
   }
   if (!opt.config || !opt.allowTestData) throw new Error('需要 --config 與 --allow-test-data；此模式會留下專用測試資料。')
   const c = validateConfig(JSON.parse(fs.readFileSync(opt.config, 'utf8')))

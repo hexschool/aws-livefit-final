@@ -264,7 +264,7 @@ async function runChecks (c, deps = {}) {
     return { ok: /^sha256:[0-9a-f]{64}$/.test(i?.imageDigest || ''), actual: `repository=${c.repository}；tag=${c.imageTag}；digest=${i?.imageDigest || '找不到'}` }
   })
   if (deps.hostReport) {
-    await check('host.verified', 10, '主機報告與雲端資源對照', '同 EC2、30 分鐘內、主機檢查全數通過，DB／S3／執行 digest 相符', '依 docs/final-check.md 重跑 SSH 主機檢查並附 --host-report；不能借用別人的報告。', async () => {
+    await check('host.verified', 10, '主機報告與雲端資源對照', '同 EC2、30 分鐘內、主機檢查全數通過，DB／S3／執行 digest 相符', '維護者以 .github/scripts/check-host.py 重跑 SSH 主機檢查並附 --host-report；不能借用別人的報告。', async () => {
       const h = deps.hostReport
       const ids = ['host.os', 'host.user', 'host.single', 'host.health', 'host.binding', 'host.restart', 'host.container-user', 'host.image', 'host.env-file', 'host.runtime', 'host.nginx', 'host.certbot-timer']
       const age = now.getTime() - Date.parse(h.checkedAt)
@@ -299,7 +299,7 @@ function parseArgs (args) {
 }
 async function main () {
   const args = parseArgs(process.argv.slice(2))
-  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找東京的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2。\n老師進階：--config FILE、--profile NAME、--host-report FILE、--out DIR。')
+  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找東京的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2。\n選用：--profile NAME 指定登入設定、--out DIR 指定報告目錄。')
   let c; let discovery
   if (args.url) {
     console.log('正在依網站網址尋找東京的 AWS 資源；不需填 JSON。')
