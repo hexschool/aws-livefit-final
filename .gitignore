@@ -10,3 +10,6 @@ coverage/
 *.log
 dist/
 jest-result.json
+*.local.json
+livefit-selfcheck*.tar.gz
+__pycache__/

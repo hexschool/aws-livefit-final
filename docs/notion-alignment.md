@@ -19,7 +19,7 @@
 | [W9 ECR](https://gonsakon.github.io/aws-course-hub/#/weeks/09-ecr/learn) | Private Repository、讀寫權限、Docker build/tag/push | 單一 LiveFit 私有儲存庫，應用映像以固定 tag 推送；同一映像帶既有前端與後端。 | Dockerfile；deploy/README.md 的 W9 指令 | 映像平台 ARM64、ECR 有指定 tag／digest；讀取角色不取得 push 權限 |
 | [W10 容器部署](https://gonsakon.github.io/aws-course-hub/#/weeks/10-container-deploy/learn) | 部署用 Linux User、EC2 Role、ECR pull、單容器、Compose、環境變數、RDS／S3／SES | 以既有服務容器化流程部署 LiveFit；EC2 Role 提供 SDK 憑證，Compose 只啟動一個 app，資料庫改 RDS。 | deploy/compose.aws.yml；deploy/.env.aws.example；backend/services/aws.js | 在 EC2 內確認 /ready、資料讀寫、S3、SES；Docker 重啟與固定版本回復 |
 | [W11 Nginx／HTTPS](https://gonsakon.github.io/aws-course-hub/#/weeks/11-nginx-https/learn) | DNS／nip.io、Nginx 反代、Certbot、HTTPS、續期 | 沿用原稿主機 Nginx／Certbot 路徑，proxy_pass 改為 W10 容器的 localhost:8080；前端與 API 同網域。 | deploy/nginx/livefit.conf；deploy/README.md 的 W11 指令 | 外部瀏覽器登入／報名、HTTP 轉 HTTPS、有效憑證、續期 dry-run；80 保留 ACME 路徑 |
-| [W12 CloudWatch](https://gonsakon.github.io/aws-course-hub/#/weeks/12-cloudwatch/learn) | EC2／RDS Dashboard、告警、SNS、Agent mem_used_percent／disk_used_percent | 監看同一台 LiveFit EC2 與 RDS，準備將 Nginx 日誌接入查錯；app stdout 的額外收集另依文件設定；保留 Agent 與原稿多組監控對應。 | deploy/cloudwatch/agent.json；deploy/cloudwatch/README.md；backend/utils/logger.js | 看到真實指標與日誌；Alarm 觸發、SNS 收到、恢復後 OK；Agent 與多告警不自行變成學生必交項 |
+| [W12 CloudWatch](https://gonsakon.github.io/aws-course-hub/#/weeks/12-cloudwatch/learn) | 原課程含 Dashboard、告警、SNS、Agent | **依 2026-09-09 使用者決定，不納入本版最終作業。** | 原參考範本保留但不套用 | 不建立、不列為學生必交、不納入自查腳本 |
 
 ## 來源差異有依據，不自行混成新課程
 
@@ -34,7 +34,7 @@
 | W7 要各建私有／公有 RDS | 使用已決定的 Private RDS。公有 DB 保留為觀念比較，不建立第二個計費資料庫。 |
 | W10 舊圖把 Nginx／Certbot 包在容器、W11 文字則安裝在主機 | 依 W10 README「單一 LiveFit Container」及 W11 的 Nginx／Certbot 步驟，先準備主機 Nginx 代理容器版本；沒有建立第二套雲端架構或改寫課程決策。 |
 | W11 tar/scp、原生 Node、Zellij | 依 v3 已定不教原生部署；保留 DNS／Nginx／Certbot／nip.io。 |
-| W12 原稿 CPU 30 秒、ARM 主機卻提供 amd64 Agent | 指標解析度與下載架構需技術校正；仍驗收相同的 CPU 告警與 Agent 指標，不加其他監控產品。詳細待套用條件寫在 CloudWatch 文件。 |
+| W12 原稿 CPU／Agent | 本版最終作業已取消監控範圍；原講義與參考範本保留，沒有追加部署或驗收要求。 |
 
 ## 原 AWS 範例沿用關係
 

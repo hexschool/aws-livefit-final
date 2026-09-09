@@ -33,7 +33,7 @@
 ## 未通過或尚待驗證
 
 - 真實網站報名成功後的 SES 通知尚未測；本機合約通過不能代替雲端業務路徑收信。
-- W12 CloudWatch Agent／Dashboard／Alarm／SNS 尚未建立驗收；已準備設定與存取範圍，等待使用者回覆。不得寫成已監控或已收到告警。
+- W12 CloudWatch／SNS：使用者於 2026-09-09 決定本版最終作業不要監控，已取消待執行提案與驗收要求；未建立，也不再列為上線阻擋。
 - S3 在允許前綴以外用不存在物件測試，收到 NoSuchKey；這個探測不足以證明 IAM 拒絕，未記為通過。
 - RDS 還原、映像回復版本尚未實測。
 - W1 已於 2026-09-09 10:15 回查 aws-course-budget：Monthly US$30，Healthy；Actual >85%、Actual >100%、Forecasted >100% 三個門檻均未超過。仍未測試預算通知實際收信。
@@ -76,3 +76,14 @@
 - 在已部署容器內，以本次 EC2 Role 對既有 practice/people-01.png 產生 expiresIn=5 的 GET URL。
 - 同一 URL 立即讀取 HTTP 200；等待八秒後讀取 HTTP 403，服務訊息為 Request has expired。
 - 僅印 HTTP 狀態與布林結果，未保存或輸出完整簽名 URL；未更改 app 的簽名有效時間或任何雲端設定。
+
+## 最終作業自查腳本第一版實測（2026-09-09，台北；之後已取消監控範圍）
+
+- `scripts/check-final.js` 使用真正 AWS CLI 查詢與外部 HTTP；不修改雲端資源。東京 CloudShell（既有 Console 身分、Node.js 20.20.2）11:46 跑完：38 項結果＝28 通過、3 需補、0 無法檢查、7 人工項。3 個缺項均是已知尚未建立的 W12 Dashboard／CPU Alarm／SNS；未擅自補建或列為通過。
+- `scripts/check-host.py` 於 11:38 經既有 deployer SSH 在本次 EC2 執行：12 項通過。OS、使用者／Docker、單一 Healthy backend、127.0.0.1:8080、restart policy、node 使用者、ARM64 image、env 權限、無固定 AWS key 環境變數、SQL TLS、Nginx 與 Certbot timer 可讀回。只用 READ ONLY SQL，不重啟、不改環境。
+- 合併主機證據時，本次 EC2 ID、RDS endpoint、Bucket／Region 與實際執行 digest 均對上 AWS 回應。原始主機報告沒有密碼或環境檔內容；自查報告是可修改的證據，不是防竄改簽章。
+- `scripts/check-flow.js --allow-test-data` 於 11:39 在真實 HTTPS 網站：4 項通過（兩帳號註冊／登入、S3 上傳／保存 key／重新登入／bytes 比對／未簽名 403、建立課程讀回、另一會員模擬購買 3 堂）；報名與寄信列人工項。新增測試資料前綴 `驗收-2026-09-09-6cde5a22`，保留兩名測試會員、一張小 PNG、一堂測試課程與一筆模擬購買，沒有金流、寄信、重啟或刪除既有資料。
+- 第一輪實機驗證找出檢查器的 ECR CLI JSON 大小寫與舊 Budget `ThresholdType` 省略問題，已修正並重測；沒有為了讓報告變綠而修改 AWS 設定。
+- Jest `test:checker` 20 項通過：包括多 SG／ENI 合併、錯 SG／公開 SSH、main route fallback、錯 alarm dimension／period、權限不足不誤判、無 Policy 與 AccessDenied、report HTML escape、未 opt-in 零寫入、不同主機／DB／過期報告拒絕。
+- 自查使用方式已補到本機第 13 單元「學生任務／克庭驗收」；課程 build 通過，這批課程文件仍未發布 GitHub Pages。
+- 原始 HTML／JSON 報告保存在 ignored `artifacts/final-check-2026-09-09/`、`artifacts/final-flow-2026-09-09/` 與 `artifacts/host-2026-09-09.json`。個人設定與 tar 包也被 gitignore 排除，CI 只跑本機回歸，不會驗收或操作學生 AWS。

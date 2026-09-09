@@ -1,6 +1,8 @@
 # W12 與最終通知驗收範圍
 
-目標只限本次 livefit-final EC2、livefit-final-db RDS 與 LiveFit 示範資料。原 W10 批准未含 CloudWatch；以下是本次要追加確認的具體範圍。
+**2026-09-09 更新：使用者決定最終作業不要監控，此監控提案已取消；不再等待監控授權，也不建立 Agent／Dashboard／Alarm／SNS。以下是未執行的歷史提案。額外報名通知仍未獲寄送批准，不能由取消監控推定同意寄信。**
+
+目標只限本次 livefit-final EC2、livefit-final-db RDS 與 LiveFit 示範資料。原 W10 批准未含 CloudWatch；以下是當時擬追加的範圍，監控部分現已取消。
 
 ## CloudWatch 與 Agent
 

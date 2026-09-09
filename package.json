@@ -14,7 +14,10 @@
     "test:m6": "jest test/m6.test.js --runInBand",
     "test:smoke": "jest test/smoke.test.js --runInBand",
     "test:aws": "jest test/aws.test.js --runInBand",
-    "test:contracts": "jest test/smoke.test.js test/m[1-6].test.js --runInBand"
+    "test:contracts": "jest test/smoke.test.js test/m[1-6].test.js --runInBand",
+    "check:final": "node scripts/check-final.js",
+    "check:flow": "node scripts/check-flow.js",
+    "test:checker": "jest test/final-check.test.js --runInBand"
   },
   "jest": {
     "testEnvironment": "node",

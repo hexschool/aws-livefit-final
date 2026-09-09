@@ -5,9 +5,11 @@
 - [AWS 線上示範](https://13.196.54.138.nip.io)：2026-09-09 部署的老師實機；保留期間才可連線。
 - [私密完整解答](https://github.com/hexschool/aws-livefit-final)：需取得 hexschool 存取權；含前後端完成程式，不是待填空的起始版。
 - [每週 Notion 對照](docs/notion-alignment.md)：來源段落、實際功能、差異依據。
-- [AWS 部署準備](deploy/README.md)：W1～W12 的相依條件與操作入口。
+- [AWS 部署準備](deploy/README.md)：W1～W11 的相依條件與操作入口。
 - [驗證結果](docs/validation.md)：本機、真實 AWS 已通過與待驗證分開記錄。
 - [瀏覽器操作紀錄](docs/browser-operations.md)：Console、網站與終端操作分開逐筆追加。
+
+- [最終作業自動檢查](docs/final-check.md)：學生以自己的資源設定跑網站／AWS／主機自查；可選擇實測功能，產生給克庭的 HTML／JSON 報告。
 
 ## 本機預覽
 
@@ -39,9 +41,9 @@ API_BASE_URL=http://localhost:3080 npm run test:aws
 - 資料：PostgreSQL／RDS；正式模式驗證 TLS 憑證，禁止啟動時自動 synchronize。`db:init` 只接受空資料庫，既有資料庫需先規劃 migration。
 - 通知：SES SendEmail；報名存檔後寄信，回應分為 accepted／failed／disabled，accepted 不代表信箱已收到。
 - 部署：同一個 ARM64 映像包含既有前端與後端，W10 以單一容器運行，W11 主機 Nginx 反代／Certbot。網站 `/api/` 同網域。
-- 維運：readiness DB 檢查、JSON 日誌、容器重啟設定；W12 對應 CloudWatch Agent／Dashboard／Alarm／SNS。
+- 維運：readiness DB 檢查、JSON 日誌、容器重啟設定；本版最終作業不包含 CloudWatch／SNS 監控。
 
-原 Node.js 解答與 Notion 講義保留原樣。AWS 版已於東京部署 EC2／S3／RDS／SES／ECR／Nginx HTTPS；CloudWatch／SNS 尚待實機驗收，不把準備範本視為完成。完整狀態見驗證紀錄。
+原 Node.js 解答與 Notion 講義保留原樣。AWS 版已於東京部署 EC2／S3／RDS／SES／ECR／Nginx HTTPS；依使用者決定，本版不納入 CloudWatch／SNS；既有 W12 參考範本未套用雲端。完整狀態見驗證紀錄。
 
 網站的「購買堂數」只寫入教學資料庫，沒有串接金流、不會扣款。SES 在 Sandbox：測試收件地址須完成驗證；本次獨立測試信已送達垃圾郵件，實際報名通知尚待驗證。測試請使用自己的信箱，不填他人的地址。
 

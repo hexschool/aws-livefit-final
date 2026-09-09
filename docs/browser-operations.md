@@ -298,3 +298,13 @@
 - 本機檔案：發現監控範本漏了明確保留天數，補 retention_in_days=7，改本次專用 /livefit-final/nginx/access 與 /livefit-final/nginx/error；JSON 與欄位檢查通過，未套到雲端。
 - 終端唯讀驗證：首次用 nip.io SSH 名稱因沒有對應已知 host key 而停止；改用先前驗證過的 EIP，未關 host key 檢查。從已部署容器以 Role 簽發五秒 GET URL；既有圖片先回 200，八秒後同一 URL 回 403／Request has expired。沒有輸出簽名 URL、修改網站設定或寫新 S3 物件。
 - W12 與真實報名通知仍等待先前的明確授權，沒有新增監控或寄信。
+
+
+### B039｜2026-09-09｜最終作業自動檢查腳本實機驗證
+- 使用者明確要求針對今天的機器寫學生自查腳本。新增只讀設定檢查、SSH 主機檢查與需明確旗標的功能測試；沒有改應用程式、監控權限或原 Notion。
+- 終端：既有本機 CLI 身分缺少 ec2:DescribeInstances，未擴大其權限；檢查器把 AccessDenied 列為無法檢查。以已授權 deployer SSH 在同一 EC2 執行只讀 Python 檢查，12 項通過；結果不含 AWS token、DB 密碼、環境檔值或私鑰。
+- 瀏覽器：既有 AWS Console → CloudShell → 東京完整頁；關閉 Welcome modal；Actions → Upload file，透過檔案選擇器上傳自查程式、非秘密的本次資源欄位與主機布林報告之壓縮包。沒有傳 RDS 建庫密碼、私鑰或 .env。
+- CloudShell：解壓到本次專用 livefit-selfcheck 目錄，以現有 Console 權限執行 AWS 只讀查詢及 HTTP。第一輪發現 ECR 參數大小寫與舊 Budget 省略百分比型別，修正檢查器後透過相同 Upload 流程重跑。最終 28 PASS／3 FAIL（W12 缺項）／0 BLOCKED／7 MANUAL。
+- CloudShell Download file 嘗試未能取得下載事件／本機檔案，改將已遮蔽的 report.json 壓縮分段印到可見終端，以 DOM 讀回並保存；比對原始 JSON 的 scriptSha256 與本機程式一致。沒有用隱藏瀏覽器 API 或匯出登入憑證。
+- 終端：明確開啟 allow-test-data，對真正 HTTPS 網站跑兩名測試會員、S3 照片、教練開課與模擬購買，4 項通過；這不是瀏覽器點擊驗證，CORS 真人操作仍另行驗收。測試資料保留並在報告列識別資訊。
+- 未呼叫報名 API、未寄送額外信件、未重啟／停止主機、未改 AWS 設定。W12 與額外通知沿用先前待回覆的授權狀態。

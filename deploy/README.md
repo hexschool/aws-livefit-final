@@ -108,11 +108,11 @@ curl --fail http://127.0.0.1:8080/ready
 
 正式外部瀏覽器驗收：首頁、登入、教練照片、購買堂數、報名、HTTP→HTTPS 與憑證。主機 curl 不能替代這一步。
 
-## W12：監控、告警、恢復與清除
+## 驗收後的資源保留與清除
 
-[CloudWatch 準備](cloudwatch/README.md) 對應原稿的 EC2／RDS Dashboard、SNS、CPU／DB 告警與 Agent 指標。先記下實際 InstanceId／DB identifier，依範本核對指標解析度與單位，不直接套原稿錯誤值。
+依 2026-09-09 使用者決定，本版最終作業不建立 CloudWatch／SNS 監控，也不把監控當作驗收要求。W12 範本僅保留作原課程參考，未執行。
 
-最後按實際建立清單回查 EC2、EIP、EBS、RDS 與快照、S3 物件所有版本、ECR images、CloudWatch logs／alarms、SNS，依課程要求逐項清除與確認費用。不要刪除其他專案共用資源；這次沒有執行清除命令。
+最後按實際建立清單回查 EC2、EIP、EBS、RDS 與快照、S3 物件所有版本、ECR images，依課程要求逐項清除與確認費用。不要刪除其他專案共用資源；這次沒有執行清除命令。
 
 ## 技術校正依據
 
