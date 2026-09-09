@@ -35,7 +35,7 @@
 - 真實網站報名成功後的 SES 通知尚未測；本機合約通過不能代替雲端業務路徑收信。
 - W12 CloudWatch Agent／Dashboard／Alarm／SNS 尚未建立驗收；已準備設定與存取範圍，等待使用者回覆。不得寫成已監控或已收到告警。
 - S3 在允許前綴以外用不存在物件測試，收到 NoSuchKey；這個探測不足以證明 IAM 拒絕，未記為通過。
-- 預簽名 URL 自然到期、RDS 還原、映像回復版本尚未實測。
+- RDS 還原、映像回復版本尚未實測。
 - W1 已於 2026-09-09 10:15 回查 aws-course-budget：Monthly US$30，Healthy；Actual >85%、Actual >100%、Forecasted >100% 三個門檻均未超過。仍未測試預算通知實際收信。
 - GitHub Actions 已於程式提交 734c176 通過合約與 AWS 模擬驗證，見下方版本交付紀錄；後續只有文件更新時不重跑同一批程式測試。
 - 尚未由克庭獨立部署，也未完成計時彩排／清除驗證，教材不得標 READY。
@@ -69,3 +69,10 @@
 - 已有三個通知門檻：Actual >85%（US$25.50）、Actual >100%（US$30）、Forecasted >100%（US$30）；均 Not exceeded，未改設定／收件人，也未觸發通知。
 - IAM Role 重新讀回仍只有 LiveFitRuntimeAccess 一項 inline policy，未附加 CloudWatch 權限。
 - W12 Agent 範本補上專用 Log Group 與七天保留；JSON 可解析，尚未套用雲端。
+
+
+## 追加 S3 到期查核（2026-09-09）
+
+- 在已部署容器內，以本次 EC2 Role 對既有 practice/people-01.png 產生 expiresIn=5 的 GET URL。
+- 同一 URL 立即讀取 HTTP 200；等待八秒後讀取 HTTP 403，服務訊息為 Request has expired。
+- 僅印 HTTP 狀態與布林結果，未保存或輸出完整簽名 URL；未更改 app 的簽名有效時間或任何雲端設定。

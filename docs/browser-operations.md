@@ -289,3 +289,12 @@
 - 視覺檢查：預設 366px 視窗，頁寬與 viewport 同為 366，分頁採橫向捲動；未額外改尺寸。檢查原 course-map 仍為 W1～W12。
 - 終端：課程 typecheck／Vite build 通過，Markdown 連結與 code fence 檢查通過；正式 HTTPS /ready 再次回 ready。
 - 狀態：新私密解答已推送；本次課程變更留本機，未發布 GitHub Pages。W12 權限／SNS 與額外報名通知仍待先前詢問回覆，未新增雲端監控、未再寄信；示範 EC2 持續 Running。
+
+
+### B038｜2026-09-09｜預算與 S3 到期補查
+- IAM Console：本次 EC2 Role 仍只有 LiveFitRuntimeAccess；未掛 CloudWatchAgentServerPolicy。
+- Console 搜尋 Budgets → aws-course-budget → Alerts／Additional budget parameters；Monthly US$30、Healthy，September MTD Actual US$1.09／Forecast US$4.33。Included filters=None，排除 Credit／Refund；屬帳號範圍的當次快照，不是 LiveFit 專案月費或最終應付帳單。
+- 三個既有門檻 Actual >85%、Actual >100%、Forecasted >100% 均 Not exceeded；沒有變更預算、通知地址或主動觸發通知。
+- 本機檔案：發現監控範本漏了明確保留天數，補 retention_in_days=7，改本次專用 /livefit-final/nginx/access 與 /livefit-final/nginx/error；JSON 與欄位檢查通過，未套到雲端。
+- 終端唯讀驗證：首次用 nip.io SSH 名稱因沒有對應已知 host key 而停止；改用先前驗證過的 EIP，未關 host key 檢查。從已部署容器以 Role 簽發五秒 GET URL；既有圖片先回 200，八秒後同一 URL 回 403／Request has expired。沒有輸出簽名 URL、修改網站設定或寫新 S3 物件。
+- W12 與真實報名通知仍等待先前的明確授權，沒有新增監控或寄信。
