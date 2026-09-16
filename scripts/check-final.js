@@ -31,8 +31,14 @@ const POLICY_ACTIONS = new Set([
   'ecr:DescribeImages', 'iam:GetGroupPolicy', 'iam:GetInstanceProfile', 'iam:GetPolicy', 'iam:GetPolicyVersion', 'iam:GetRolePolicy', 'iam:GetUserPolicy',
   'iam:ListAttachedGroupPolicies', 'iam:ListAttachedRolePolicies', 'iam:ListAttachedUserPolicies', 'iam:ListGroupPolicies', 'iam:ListGroupsForUser',
   'iam:ListRolePolicies', 'iam:ListUserPolicies', 'rds:DescribeDBInstances', 's3:GetBucketCORS', 's3:GetBucketLocation', 's3:GetBucketOwnershipControls',
-  's3:GetBucketPolicyStatus', 's3:GetBucketPublicAccessBlock', 's3:GetBucketVersioning', 's3:GetObject', 's3:ListBucketVersions', 'ses:GetEmailIdentity', 'sts:GetCallerIdentity'
+  's3:GetBucketPolicyStatus', 's3:GetBucketPublicAccessBlock', 's3:GetBucketVersioning', 's3:GetObject', 's3:ListBucketVersions', 'ses:GetEmailIdentity', 'sts:GetCallerIdentity',
+  // CloudShell needs these to open the student's own shell and upload the checker; they touch no course resource.
+  'cloudshell:CreateEnvironment', 'cloudshell:CreateSession', 'cloudshell:GetEnvironmentStatus', 'cloudshell:GetFileUploadUrls', 'cloudshell:PutCredentials', 'cloudshell:StartEnvironment'
 ].map(a => a.toLowerCase()))
+// Template actions that support resource-level permissions; the student's policy must not grant them on Resource "*".
+const SCOPED_ACTIONS = new Set([...POLICY_ACTIONS].filter(a => !/^(ec2|sts|cloudshell):/.test(a)))
+// The Console attaches this AWS managed policy when a new user must change password at first sign-in; it only allows changing one's own password.
+const IGNORED_MANAGED_POLICIES = new Set(['arn:aws:iam::aws:policy/IAMUserChangePassword'])
 function scrub (value) {
   return String(value).replace(/arn:aws[^\s"<>]*/g, '[ARN 已遮蔽]')
     .replace(/\b\d{12}\b/g, '[帳號已遮蔽]')
@@ -78,14 +84,20 @@ function policyDocument (raw) {
   if (typeof raw !== 'string') return raw
   try { return JSON.parse(raw) } catch { return JSON.parse(decodeURIComponent(raw)) }
 }
-function extraActions (policies, allowed = POLICY_ACTIONS) {
+function extraActions (policies, allowed = POLICY_ACTIONS, scoped = SCOPED_ACTIONS) {
   const extra = new Set()
   for (const { name, document } of policies) {
     for (const s of [].concat(document?.Statement || [])) {
       if (s.Effect !== 'Allow') continue
       if (s.NotAction !== undefined) extra.add(`${name}: NotAction`)
+      if (s.NotResource !== undefined) extra.add(`${name}: NotResource`)
+      const resources = [].concat(s.Resource || []).map(String)
+      const star = resources.some(r => r === '*')
+      const placeholder = resources.some(r => r.includes('YOUR_ACCOUNT_ID'))
       for (const action of [].concat(s.Action || [])) {
         if (typeof action !== 'string' || /[*?]/.test(action) || !allowed.has(action.toLowerCase())) extra.add(`${name}: ${action}`)
+        else if (star && scoped.has(action.toLowerCase())) extra.add(`${name}: ${action}（Resource 是 *，範本要求限自己帳號）`)
+        else if (placeholder) extra.add(`${name}: ${action}（Resource 的 YOUR_ACCOUNT_ID 未替換）`)
       }
     }
   }
@@ -95,6 +107,7 @@ async function callerPolicies (aws, arn) {
   const policies = []
   const managed = async (list, name) => {
     for (const p of (await aws('iam', list.operation, list.input)).AttachedPolicies || []) {
+      if (IGNORED_MANAGED_POLICIES.has(p.PolicyArn)) continue
       const policy = (await aws('iam', 'get-policy', { PolicyArn: p.PolicyArn })).Policy
       const version = (await aws('iam', 'get-policy-version', { PolicyArn: p.PolicyArn, VersionId: policy.DefaultVersionId })).PolicyVersion
       policies.push({ name: `${name}/${p.PolicyName}`, document: policyDocument(version.Document) })
@@ -136,10 +149,10 @@ async function checkCaller (aws, allowed = POLICY_ACTIONS) {
   }
   const extra = extraActions(caller.policies, allowed)
   if (extra.length) {
-    const admin = extra.some(x => /: \*$/.test(x))
-    throw Object.assign(new Error(`${admin ? '拒絕以 admin 身分執行自查。' : '拒絕執行：目前身分的權限超出自查所需。'}請建立只掛 deploy/iam/final-check-policy.json 的專用身分。多餘的 Allow：\n  ${extra.join('\n  ')}`), { code: admin ? 'AdminIdentity' : 'ExcessPermissions', extra })
+    const admin = extra.some(x => /: \*(:\*)?$/.test(x))
+    throw Object.assign(new Error(`${admin ? '拒絕以 admin 身分執行自查。' : '拒絕執行：目前身分的權限超出自查所需。'}請建立只掛 deploy/iam/final-check-policy.json 的專用身分（Resource 依範本限自己帳號）。多餘或未收斂的 Allow：\n  ${extra.join('\n  ')}`), { code: admin ? 'AdminIdentity' : 'ExcessPermissions', extra })
   }
-  return { type: caller.type, account: identity.Account, policies: caller.policies.length }
+  return { type: caller.type, accountSuffix: String(identity.Account || '').slice(-4), policies: caller.policies.length }
 }
 function request (url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -407,5 +420,5 @@ async function main () {
   console.log(`\n${Object.entries(totals(report)).map(([s, n]) => `${LABELS[s]} ${n}`).join(' / ')}\n報告：${out}/report.html`)
   process.exitCode = exitCode(report)
 }
-module.exports = { VERSION, READS, POLICY_ACTIONS, policyDocument, extraActions, callerPolicies, checkCaller, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
+module.exports = { VERSION, READS, POLICY_ACTIONS, SCOPED_ACTIONS, IGNORED_MANAGED_POLICIES, policyDocument, extraActions, callerPolicies, checkCaller, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
 if (require.main === module) main().catch(e => { console.error(scrub(e.message)); process.exitCode = 2 })

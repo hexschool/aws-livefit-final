@@ -2,16 +2,35 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "FinalCheckReadOnly",
+      "Sid": "FinalCheckActionsWithoutResourceScope",
       "Effect": "Allow",
       "Action": [
-        "budgets:ViewBudget",
         "ec2:DescribeAddresses",
         "ec2:DescribeImages",
         "ec2:DescribeInstances",
         "ec2:DescribeRouteTables",
         "ec2:DescribeSecurityGroups",
-        "ecr:DescribeImages",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FinalCheckCloudShellSession",
+      "Effect": "Allow",
+      "Action": [
+        "cloudshell:CreateEnvironment",
+        "cloudshell:CreateSession",
+        "cloudshell:GetEnvironmentStatus",
+        "cloudshell:GetFileUploadUrls",
+        "cloudshell:PutCredentials",
+        "cloudshell:StartEnvironment"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FinalCheckIamReadsInOwnAccount",
+      "Effect": "Allow",
+      "Action": [
         "iam:GetGroupPolicy",
         "iam:GetInstanceProfile",
         "iam:GetPolicy",
@@ -24,25 +43,66 @@
         "iam:ListGroupPolicies",
         "iam:ListGroupsForUser",
         "iam:ListRolePolicies",
-        "iam:ListUserPolicies",
-        "rds:DescribeDBInstances",
+        "iam:ListUserPolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::YOUR_ACCOUNT_ID:*",
+        "arn:aws:iam::aws:policy/*"
+      ]
+    },
+    {
+      "Sid": "FinalCheckRdsInOwnAccount",
+      "Effect": "Allow",
+      "Action": "rds:DescribeDBInstances",
+      "Resource": "arn:aws:rds:ap-northeast-1:YOUR_ACCOUNT_ID:db:*"
+    },
+    {
+      "Sid": "FinalCheckEcrInOwnAccount",
+      "Effect": "Allow",
+      "Action": "ecr:DescribeImages",
+      "Resource": "arn:aws:ecr:ap-northeast-1:YOUR_ACCOUNT_ID:repository/*"
+    },
+    {
+      "Sid": "FinalCheckSesInOwnAccount",
+      "Effect": "Allow",
+      "Action": "ses:GetEmailIdentity",
+      "Resource": "arn:aws:ses:ap-northeast-1:YOUR_ACCOUNT_ID:identity/*"
+    },
+    {
+      "Sid": "FinalCheckBudgetsInOwnAccount",
+      "Effect": "Allow",
+      "Action": "budgets:ViewBudget",
+      "Resource": "arn:aws:budgets::YOUR_ACCOUNT_ID:budget/*"
+    },
+    {
+      "Sid": "FinalCheckBucketSettingsInOwnAccount",
+      "Effect": "Allow",
+      "Action": [
         "s3:GetBucketCORS",
         "s3:GetBucketLocation",
         "s3:GetBucketOwnershipControls",
         "s3:GetBucketPolicyStatus",
         "s3:GetBucketPublicAccessBlock",
         "s3:GetBucketVersioning",
-        "s3:ListBucketVersions",
-        "ses:GetEmailIdentity",
-        "sts:GetCallerIdentity"
+        "s3:ListBucketVersions"
       ],
-      "Resource": "*"
+      "Resource": "arn:aws:s3:::*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceAccount": "YOUR_ACCOUNT_ID"
+        }
+      }
     },
     {
-      "Sid": "FinalCheckPracticeObjectHead",
+      "Sid": "FinalCheckPracticeObjectHeadInOwnAccount",
       "Effect": "Allow",
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::*/practice/*"
+      "Resource": "arn:aws:s3:::*/practice/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceAccount": "YOUR_ACCOUNT_ID"
+        }
+      }
     }
   ]
 }
