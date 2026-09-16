@@ -37,7 +37,7 @@ docker compose exec backend npm run db:seed
 
 自查只能用**自查專用的唯讀身分**執行。root、admin，或任何權限超出範本的身分都會在第一步被拒絕。先建立這個身分：
 
-1. IAM → Policies → Create policy → JSON，貼上 [deploy/iam/final-check-policy.json](deploy/iam/final-check-policy.json)，把所有 `YOUR_ACCOUNT_ID` 換成自己的 12 碼帳號 ID（Console 右上角帳號選單），其餘不要改，命名 `livefit-final-check`。範本只有唯讀查詢加上開啟自己 CloudShell 與上傳檔案的權限；EC2 Describe 與 CloudShell 依 AWS 文件只能用 `Resource: *`，其餘都限在自己帳號，自查會檢查這一點。
+1. IAM → Policies → Create policy → JSON，貼上 [deploy/iam/final-check-policy.json](deploy/iam/final-check-policy.json)，把所有 `YOUR_ACCOUNT_ID` 換成自己的 12 碼帳號 ID（Console 右上角帳號選單），其餘不要改，命名 `livefit-final-check`。範本只有唯讀查詢加上開啟自己 CloudShell 與上傳檔案的權限；EC2 Describe、STS GetCallerIdentity 與 CloudShell 依 AWS 文件只能用 `Resource: *`，其餘都限在自己帳號（ARN 帳號段或 S3 的 `aws:ResourceAccount` 條件），自查會檢查這一點。
 2. IAM → Users → Create user，命名 `livefit-checker`，勾選 Console 存取；權限只附加 `livefit-final-check`，不加入任何 group、不附加其他 policy。Console 為「下次登入須重設密碼」自動附加的 `IAMUserChangePassword` 是唯一例外，自查會略過它。
 3. 登出 Console，改用 `livefit-checker` 登入，再開 CloudShell 或設定本機 CLI profile。
 

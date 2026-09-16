@@ -262,10 +262,28 @@ test('範本內 action 若給 Resource *，或 YOUR_ACCOUNT_ID 沒替換，一�
   const wide = callerAws('arn:aws:iam::123456789012:user/me', doc({ Statement: [{ Effect: 'Allow', Action: ['rds:DescribeDBInstances', 'ec2:DescribeInstances'], Resource: '*' }] }))
   await expect(checkCaller(wide)).rejects.toMatchObject({ code: 'ExcessPermissions', extra: ['user me/inline: rds:DescribeDBInstances（Resource 是 *，範本要求限自己帳號）'] })
   const raw = callerAws('arn:aws:iam::123456789012:user/me', doc(template))
-  await expect(checkCaller(raw)).rejects.toMatchObject({ code: 'ExcessPermissions' })
   const { extra } = await checkCaller(raw).catch(e => e)
   expect(extra.every(x => x.includes('YOUR_ACCOUNT_ID 未替換'))).toBe(true)
-  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', NotResource: 'arn:aws:rds:*:*:db:x' }] } }])).toEqual(['p: NotResource'])
+  expect(extra.some(x => x.startsWith('user me/inline: s3:GetObject'))).toBe(true) // placeholder inside Condition is caught too
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', NotResource: 'arn:aws:rds:*:*:db:x' }] } }], '123456789012')).toEqual(['p: NotResource'])
+})
+test('等同 * 的 ARN、別人的帳號、S3 沒有帳號條件都不算限自己帳號；範本寫法放行', () => {
+  const me = '123456789012'; const s3 = { StringEquals: { 'aws:ResourceAccount': me } }
+  const ok = [
+    { Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: `arn:aws:rds:ap-northeast-1:${me}:db:*` },
+    { Effect: 'Allow', Action: 'iam:GetPolicy', Resource: [`arn:aws:iam::${me}:*`, 'arn:aws:iam::aws:policy/*'] },
+    { Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*', Condition: s3 },
+    { Effect: 'Allow', Action: 'ec2:DescribeInstances', Resource: '*' }
+  ]
+  expect(extraActions([{ name: 'p', document: { Statement: ok } }], me)).toEqual([])
+  const bad = {
+    'arn:*': 'Resource 不是可辨識的 ARN',
+    'arn:aws:rds:*:*:db:*': 'Resource 的帳號段不是自己的帳號',
+    'arn:aws:rds:ap-northeast-1:999999999999:db:*': 'Resource 的帳號段不是自己的帳號',
+    'arn:aws:iam::*:*': 'Resource 的帳號段不是自己的帳號'
+  }
+  for (const [resource, reason] of Object.entries(bad)) expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: resource }] } }], me)).toEqual([`p: rds:DescribeDBInstances（${reason}）`])
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*' }] } }], me)).toEqual(['p: s3:GetBucketLocation（S3 Resource 沒有用 aws:ResourceAccount 條件限自己帳號）'])
 })
 test('root 身分立即拒絕，不讀任何 policy', async () => {
   const aws = callerAws('arn:aws:iam::123456789012:root', {})
@@ -299,7 +317,7 @@ test('範本以外的 Allow action 拒絕並列出；Deny 與大小寫不影響'
     'list-groups-for-user': { Groups: [] }
   })
   await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'ExcessPermissions', extra: ['user me/inline: S3:GETBUCKETLOCATION（Resource 是 *，範本要求限自己帳號）', 'user me/inline: s3:PutObject'] })
-  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', NotAction: 'iam:*', Resource: '*' }, { Effect: 'Allow', Action: 'ec2:Describe*', Resource: '*' }] } }])).toEqual(['p: NotAction', 'p: ec2:Describe*'])
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', NotAction: 'iam:*', Resource: '*' }, { Effect: 'Allow', Action: 'ec2:Describe*', Resource: '*' }] } }], '123456789012')).toEqual(['p: NotAction', 'p: ec2:Describe*'])
 })
 test('只掛範本的 IAM User（含 group）與 Role session 可以執行', async () => {
   const user = callerAws('arn:aws:iam::123456789012:user/livefit-checker', {

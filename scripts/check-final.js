@@ -84,20 +84,29 @@ function policyDocument (raw) {
   if (typeof raw !== 'string') return raw
   try { return JSON.parse(raw) } catch { return JSON.parse(decodeURIComponent(raw)) }
 }
-function extraActions (policies, allowed = POLICY_ACTIONS, scoped = SCOPED_ACTIONS) {
+// Why a scoped action's statement does not stay inside the caller's own account; undefined when it does.
+function scopeProblem (statement, account) {
+  if (JSON.stringify(statement).includes('YOUR_ACCOUNT_ID')) return 'YOUR_ACCOUNT_ID 未替換成自己的帳號 ID'
+  const resources = [].concat(statement.Resource || []).map(String)
+  if (resources.some(r => r === '*')) return 'Resource 是 *，範本要求限自己帳號'
+  const owner = [].concat(statement.Condition?.StringEquals?.['aws:ResourceAccount'] || [])
+  for (const r of resources) {
+    const m = r.match(/^arn:aws:([a-z0-9-]+):([^:]*):([^:]*):/)
+    if (!m) return 'Resource 不是可辨識的 ARN'
+    if (m[1] === 's3') { if (!(owner.length === 1 && owner[0] === account)) return 'S3 Resource 沒有用 aws:ResourceAccount 條件限自己帳號' } else if (m[3] !== account && !(m[1] === 'iam' && m[3] === 'aws')) return 'Resource 的帳號段不是自己的帳號'
+  }
+}
+function extraActions (policies, account, allowed = POLICY_ACTIONS, scoped = SCOPED_ACTIONS) {
   const extra = new Set()
   for (const { name, document } of policies) {
     for (const s of [].concat(document?.Statement || [])) {
       if (s.Effect !== 'Allow') continue
       if (s.NotAction !== undefined) extra.add(`${name}: NotAction`)
       if (s.NotResource !== undefined) extra.add(`${name}: NotResource`)
-      const resources = [].concat(s.Resource || []).map(String)
-      const star = resources.some(r => r === '*')
-      const placeholder = resources.some(r => r.includes('YOUR_ACCOUNT_ID'))
+      let problem
       for (const action of [].concat(s.Action || [])) {
         if (typeof action !== 'string' || /[*?]/.test(action) || !allowed.has(action.toLowerCase())) extra.add(`${name}: ${action}`)
-        else if (star && scoped.has(action.toLowerCase())) extra.add(`${name}: ${action}（Resource 是 *，範本要求限自己帳號）`)
-        else if (placeholder) extra.add(`${name}: ${action}（Resource 的 YOUR_ACCOUNT_ID 未替換）`)
+        else if (scoped.has(action.toLowerCase()) && (problem ??= scopeProblem(s, account) || false)) extra.add(`${name}: ${action}（${problem}）`)
       }
     }
   }
@@ -147,7 +156,7 @@ async function checkCaller (aws, allowed = POLICY_ACTIONS) {
     if (e.code === 'UnsupportedIdentity') throw Object.assign(new Error('自查只接受 IAM User 或 Role session 身分。'), { code: e.code })
     throw Object.assign(new Error(`無法讀取目前身分的 IAM policy（${e.code}）。自查專用身分必須掛上 deploy/iam/final-check-policy.json 才能自我檢查。`), { code: e.code })
   }
-  const extra = extraActions(caller.policies, allowed)
+  const extra = extraActions(caller.policies, String(identity.Account || ''), allowed)
   if (extra.length) {
     const admin = extra.some(x => /: \*(:\*)?$/.test(x))
     throw Object.assign(new Error(`${admin ? '拒絕以 admin 身分執行自查。' : '拒絕執行：目前身分的權限超出自查所需。'}請建立只掛 deploy/iam/final-check-policy.json 的專用身分（Resource 依範本限自己帳號）。多餘或未收斂的 Allow：\n  ${extra.join('\n  ')}`), { code: admin ? 'AdminIdentity' : 'ExcessPermissions', extra })
@@ -420,5 +429,5 @@ async function main () {
   console.log(`\n${Object.entries(totals(report)).map(([s, n]) => `${LABELS[s]} ${n}`).join(' / ')}\n報告：${out}/report.html`)
   process.exitCode = exitCode(report)
 }
-module.exports = { VERSION, READS, POLICY_ACTIONS, SCOPED_ACTIONS, IGNORED_MANAGED_POLICIES, policyDocument, extraActions, callerPolicies, checkCaller, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
+module.exports = { VERSION, READS, POLICY_ACTIONS, SCOPED_ACTIONS, IGNORED_MANAGED_POLICIES, policyDocument, scopeProblem, extraActions, callerPolicies, checkCaller, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
 if (require.main === module) main().catch(e => { console.error(scrub(e.message)); process.exitCode = 2 })
