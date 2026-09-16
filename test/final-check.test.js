@@ -265,7 +265,7 @@ test('範本內 action 若給 Resource *，或 YOUR_ACCOUNT_ID 沒替換，一�
   const { extra } = await checkCaller(raw).catch(e => e)
   expect(extra.every(x => x.includes('YOUR_ACCOUNT_ID 未替換'))).toBe(true)
   expect(extra.some(x => x.startsWith('user me/inline: s3:GetObject'))).toBe(true) // placeholder inside Condition is caught too
-  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', NotResource: 'arn:aws:rds:*:*:db:x' }] } }], '123456789012')).toEqual(['p: NotResource'])
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', NotResource: 'arn:aws:rds:*:*:db:x' }] } }], '123456789012')).toEqual(['p: NotResource', 'p: rds:DescribeDBInstances（Resource 缺省）'])
 })
 test('等同 * 的 ARN、別人的帳號、S3 沒有帳號條件都不算限自己帳號；範本寫法放行', () => {
   const me = '123456789012'; const s3 = { StringEquals: { 'aws:ResourceAccount': me } }
