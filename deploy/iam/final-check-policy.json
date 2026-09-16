@@ -1,0 +1,48 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FinalCheckReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "budgets:ViewBudget",
+        "ec2:DescribeAddresses",
+        "ec2:DescribeImages",
+        "ec2:DescribeInstances",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeSecurityGroups",
+        "ecr:DescribeImages",
+        "iam:GetGroupPolicy",
+        "iam:GetInstanceProfile",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:GetRolePolicy",
+        "iam:GetUserPolicy",
+        "iam:ListAttachedGroupPolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListAttachedUserPolicies",
+        "iam:ListGroupPolicies",
+        "iam:ListGroupsForUser",
+        "iam:ListRolePolicies",
+        "iam:ListUserPolicies",
+        "rds:DescribeDBInstances",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLocation",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicyStatus",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketVersioning",
+        "s3:ListBucketVersions",
+        "ses:GetEmailIdentity",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "FinalCheckPracticeObjectHead",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::*/practice/*"
+    }
+  ]
+}

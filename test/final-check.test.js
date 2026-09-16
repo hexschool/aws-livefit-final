@@ -1,4 +1,4 @@
-const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS } = require('../scripts/check-final')
+const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS, POLICY_ACTIONS, extraActions, checkCaller } = require('../scripts/check-final')
 const { runFlow } = require('../.github/scripts/check-flow')
 const { discover, roleResources, validateUrl } = require('../scripts/discover-final')
 const c = { url: 'https://class.example.com', region: 'ap-northeast-1', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
@@ -225,4 +225,76 @@ test('未辨識資源不發無範圍查詢，SSH 自動模式不宣稱來源就�
   expect(report.checks.find(x => x.id === 's3.block')).toMatchObject({ status: 'BLOCKED', fix: '有兩個 Bucket，請選擇' })
   expect(report.checks.find(x => x.id === 'network.web-sg').expected).toContain('該 IP 是否為自己的電腦另行確認')
   expect(report.checks.some(x => x.id.startsWith('manual.'))).toBe(false)
+})
+
+const template = require('../deploy/iam/final-check-policy.json')
+const templateActions = template.Statement.flatMap(x => [].concat(x.Action))
+function callerAws (arn, data) {
+  return jest.fn(async (service, operation, input) => {
+    expect(READS.has(`${service}/${operation}`)).toBe(true)
+    if (operation === 'get-caller-identity') return { Account: '123456789012', Arn: arn }
+    const key = input?.PolicyArn ? `${operation}:${input.PolicyArn}` : input?.PolicyName ? `${operation}:${input.PolicyName}` : operation
+    if (!(key in data) && !(operation in data)) throw Object.assign(new Error(), { code: 'AccessDenied', status: 'BLOCKED' })
+    return data[key] ?? data[operation]
+  })
+}
+const templateDoc = { Statement: [{ Effect: 'Allow', Action: templateActions, Resource: '*' }] }
+const managed = (arn, document) => ({
+  [`get-policy:${arn}`]: { Policy: { DefaultVersionId: 'v1' } },
+  [`get-policy-version:${arn}`]: { PolicyVersion: { Document: document } }
+})
+test('自查專用 policy 範本與程式內清單一致，且全為只讀 action', () => {
+  expect(new Set(templateActions.map(x => x.toLowerCase()))).toEqual(POLICY_ACTIONS)
+  expect(templateActions.every(x => /^[a-z0-9]+:(Get|List|Describe|View)[A-Za-z]+$/.test(x))).toBe(true)
+  expect(template.Statement.every(x => x.Effect === 'Allow')).toBe(true)
+})
+test('root 身分立即拒絕，不讀任何 policy', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:root', {})
+  await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'RootIdentity' })
+  expect(aws).toHaveBeenCalledTimes(1)
+})
+test('AdministratorAccess 或萬用 action 視為 admin 並列出', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:user/me', {
+    'list-user-policies': { PolicyNames: [] },
+    'list-attached-user-policies': { AttachedPolicies: [{ PolicyName: 'AdministratorAccess', PolicyArn: 'arn:aws:iam::aws:policy/AdministratorAccess' }] },
+    'list-groups-for-user': { Groups: [] },
+    ...managed('arn:aws:iam::aws:policy/AdministratorAccess', { Statement: [{ Effect: 'Allow', Action: '*', Resource: '*' }] })
+  })
+  await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'AdminIdentity', extra: ['user me/AdministratorAccess: *'] })
+})
+test('範本以外的 Allow action 拒絕並列出；Deny 與大小寫不影響', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:user/path/me', {
+    'list-user-policies': { PolicyNames: ['inline'] },
+    'get-user-policy:inline': { PolicyDocument: encodeURIComponent(JSON.stringify({ Statement: [
+      { Effect: 'Allow', Action: ['S3:GETBUCKETLOCATION', 's3:PutObject'], Resource: '*' },
+      { Effect: 'Deny', Action: 'ec2:TerminateInstances', Resource: '*' }
+    ] })) },
+    'list-attached-user-policies': { AttachedPolicies: [] },
+    'list-groups-for-user': { Groups: [] }
+  })
+  await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'ExcessPermissions', extra: ['user me/inline: s3:PutObject'] })
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', NotAction: 'iam:*', Resource: '*' }, { Effect: 'Allow', Action: 'ec2:Describe*', Resource: '*' }] } }])).toEqual(['p: NotAction', 'p: ec2:Describe*'])
+})
+test('只掛範本的 IAM User（含 group）與 Role session 可以執行', async () => {
+  const user = callerAws('arn:aws:iam::123456789012:user/livefit-checker', {
+    'list-user-policies': { PolicyNames: [] },
+    'list-attached-user-policies': { AttachedPolicies: [{ PolicyName: 'livefit-final-check', PolicyArn: 'arn:aws:iam::123456789012:policy/livefit-final-check' }] },
+    'list-groups-for-user': { Groups: [{ GroupName: 'checkers' }] },
+    'list-group-policies': { PolicyNames: ['group-inline'] },
+    'get-group-policy:group-inline': { PolicyDocument: templateDoc },
+    'list-attached-group-policies': { AttachedPolicies: [] },
+    ...managed('arn:aws:iam::123456789012:policy/livefit-final-check', templateDoc)
+  })
+  await expect(checkCaller(user)).resolves.toEqual({ type: 'IAM User', account: '123456789012', policies: 2 })
+  const role = callerAws('arn:aws:sts::123456789012:assumed-role/checker-role/session', {
+    'list-role-policies': { PolicyNames: ['inline'] },
+    'get-role-policy:inline': { PolicyDocument: templateDoc },
+    'list-attached-role-policies': { AttachedPolicies: [] }
+  })
+  await expect(checkCaller(role)).resolves.toMatchObject({ type: 'Role session', policies: 1 })
+})
+test('未登入或讀不到 policy 都不放行，錯誤訊息指向專用身分', async () => {
+  await expect(checkCaller(async () => { throw Object.assign(new Error(), { code: 'CommandFailed' }) })).rejects.toThrow(/登入/)
+  await expect(checkCaller(callerAws('arn:aws:iam::123456789012:user/me', {}))).rejects.toMatchObject({ code: 'AccessDenied' })
+  await expect(checkCaller(callerAws('arn:aws:iam::123456789012:federated-user/x', {}))).rejects.toMatchObject({ code: 'UnsupportedIdentity' })
 })
