@@ -282,8 +282,9 @@ test('等同 * 的 ARN、別人的帳號、S3 沒有帳號條件都不算限自�
     'arn:aws:rds:ap-northeast-1:999999999999:db:*': 'Resource 的帳號段不是自己的帳號',
     'arn:aws:iam::*:*': 'Resource 的帳號段不是自己的帳號'
   }
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances' }] } }], me)).toEqual(['p: rds:DescribeDBInstances（Resource 缺省）'])
   for (const [resource, reason] of Object.entries(bad)) expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: resource }] } }], me)).toEqual([`p: rds:DescribeDBInstances（${reason}）`])
-  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*' }] } }], me)).toEqual(['p: s3:GetBucketLocation（S3 Resource 沒有用 aws:ResourceAccount 條件限自己帳號）'])
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*' }] } }], me)).toEqual(['p: s3:GetBucketLocation（S3 Resource 沒有照範本以 StringEquals aws:ResourceAccount 限自己帳號）'])
 })
 test('root 身分立即拒絕，不讀任何 policy', async () => {
   const aws = callerAws('arn:aws:iam::123456789012:root', {})
@@ -363,4 +364,5 @@ test('未登入或讀不到 policy 都不放行，錯誤訊息指向專用身分
   await expect(checkCaller(async () => { throw Object.assign(new Error(), { code: 'CommandFailed' }) })).rejects.toThrow(/登入/)
   await expect(checkCaller(callerAws('arn:aws:iam::123456789012:user/me', {}))).rejects.toMatchObject({ code: 'AccessDenied' })
   await expect(checkCaller(callerAws('arn:aws:iam::123456789012:federated-user/x', {}))).rejects.toMatchObject({ code: 'UnsupportedIdentity' })
+  await expect(checkCaller(async () => ({ Arn: 'arn:aws:iam::123456789012:user/me' }))).rejects.toMatchObject({ code: 'UnknownIdentity' })
 })

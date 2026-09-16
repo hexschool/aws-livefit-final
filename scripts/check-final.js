@@ -26,6 +26,7 @@ const READS = new Set([
   'budgets/describe-budget', 'budgets/describe-budgets', 'budgets/describe-notifications-for-budget'
 ])
 // Mirrors deploy/iam/final-check-policy.json; the checker refuses any identity allowed to do more than this.
+// Least privilege: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege
 const POLICY_ACTIONS = new Set([
   'budgets:ViewBudget', 'ec2:DescribeAddresses', 'ec2:DescribeImages', 'ec2:DescribeInstances', 'ec2:DescribeRouteTables', 'ec2:DescribeSecurityGroups',
   'ecr:DescribeImages', 'iam:GetGroupPolicy', 'iam:GetInstanceProfile', 'iam:GetPolicy', 'iam:GetPolicyVersion', 'iam:GetRolePolicy', 'iam:GetUserPolicy',
@@ -33,11 +34,15 @@ const POLICY_ACTIONS = new Set([
   'iam:ListRolePolicies', 'iam:ListUserPolicies', 'rds:DescribeDBInstances', 's3:GetBucketCORS', 's3:GetBucketLocation', 's3:GetBucketOwnershipControls',
   's3:GetBucketPolicyStatus', 's3:GetBucketPublicAccessBlock', 's3:GetBucketVersioning', 's3:GetObject', 's3:ListBucketVersions', 'ses:GetEmailIdentity', 'sts:GetCallerIdentity',
   // CloudShell needs these to open the student's own shell and upload the checker; they touch no course resource.
+  // https://docs.aws.amazon.com/cloudshell/latest/userguide/sec-auth-with-identities.html (CreateEnvironment only accepts Resource "*")
   'cloudshell:CreateEnvironment', 'cloudshell:CreateSession', 'cloudshell:GetEnvironmentStatus', 'cloudshell:GetFileUploadUrls', 'cloudshell:PutCredentials', 'cloudshell:StartEnvironment'
 ].map(a => a.toLowerCase()))
 // Template actions that support resource-level permissions; the student's policy must not grant them on Resource "*".
+// ec2 Describe* has no resource-level support: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-policy-structure.html#ec2-supported-iam-actions-resources
+// Resource element and when "*" is required: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html
 const SCOPED_ACTIONS = new Set([...POLICY_ACTIONS].filter(a => !/^(ec2|sts|cloudshell):/.test(a)))
 // The Console attaches this AWS managed policy when a new user must change password at first sign-in; it only allows changing one's own password.
+// https://docs.aws.amazon.com/aws-managed-policy/latest/reference/IAMUserChangePassword.html
 const IGNORED_MANAGED_POLICIES = new Set(['arn:aws:iam::aws:policy/IAMUserChangePassword'])
 function scrub (value) {
   return String(value).replace(/arn:aws[^\s"<>]*/g, '[ARN 已遮蔽]')
@@ -85,15 +90,18 @@ function policyDocument (raw) {
   try { return JSON.parse(raw) } catch { return JSON.parse(decodeURIComponent(raw)) }
 }
 // Why a scoped action's statement does not stay inside the caller's own account; undefined when it does.
+// S3 ARNs carry no account segment, so ownership is checked via aws:ResourceAccount:
+// https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html#condition-keys-resourceaccount
 function scopeProblem (statement, account) {
   if (JSON.stringify(statement).includes('YOUR_ACCOUNT_ID')) return 'YOUR_ACCOUNT_ID 未替換成自己的帳號 ID'
   const resources = [].concat(statement.Resource || []).map(String)
+  if (!resources.length) return 'Resource 缺省'
   if (resources.some(r => r === '*')) return 'Resource 是 *，範本要求限自己帳號'
   const owner = [].concat(statement.Condition?.StringEquals?.['aws:ResourceAccount'] || [])
   for (const r of resources) {
     const m = r.match(/^arn:aws:([a-z0-9-]+):([^:]*):([^:]*):/)
     if (!m) return 'Resource 不是可辨識的 ARN'
-    if (m[1] === 's3') { if (!(owner.length === 1 && owner[0] === account)) return 'S3 Resource 沒有用 aws:ResourceAccount 條件限自己帳號' } else if (m[3] !== account && !(m[1] === 'iam' && m[3] === 'aws')) return 'Resource 的帳號段不是自己的帳號'
+    if (m[1] === 's3') { if (!(owner.length === 1 && owner[0] === account)) return 'S3 Resource 沒有照範本以 StringEquals aws:ResourceAccount 限自己帳號' } else if (m[3] !== account && !(m[1] === 'iam' && m[3] === 'aws')) return 'Resource 的帳號段不是自己的帳號'
   }
 }
 function extraActions (policies, account, allowed = POLICY_ACTIONS, scoped = SCOPED_ACTIONS) {
@@ -149,7 +157,7 @@ async function callerPolicies (aws, arn) {
 async function checkCaller (aws, allowed = POLICY_ACTIONS) {
   let identity
   try { identity = await aws('sts', 'get-caller-identity') } catch (e) { throw Object.assign(new Error(`無法確認 AWS 身分（${e.code}）。請先以自查專用唯讀身分登入 AWS CLI 或 CloudShell 再執行。`), { code: e.code }) }
-  if (!identity?.Arn) throw Object.assign(new Error('無法確認 AWS 身分。'), { code: 'UnknownIdentity' })
+  if (!identity?.Arn || !/^\d{12}$/.test(String(identity.Account))) throw Object.assign(new Error('無法確認 AWS 身分。'), { code: 'UnknownIdentity' })
   if (/:root$/.test(identity.Arn)) throw Object.assign(new Error('拒絕以 root 身分執行自查。請依 README 建立自查專用唯讀身分（deploy/iam/final-check-policy.json）並用它登入後重跑。'), { code: 'RootIdentity' })
   let caller
   try { caller = await callerPolicies(aws, identity.Arn) } catch (e) {
