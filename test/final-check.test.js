@@ -1,4 +1,4 @@
-const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS } = require('../scripts/check-final')
+const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS, POLICY_ACTIONS, SCOPED_ACTIONS, extraActions, checkCaller } = require('../scripts/check-final')
 const { runFlow } = require('../.github/scripts/check-flow')
 const { discover, roleResources, validateUrl } = require('../scripts/discover-final')
 const c = { url: 'https://class.example.com', region: 'ap-northeast-1', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
@@ -225,4 +225,144 @@ test('未辨識資源不發無範圍查詢，SSH 自動模式不宣稱來源就�
   expect(report.checks.find(x => x.id === 's3.block')).toMatchObject({ status: 'BLOCKED', fix: '有兩個 Bucket，請選擇' })
   expect(report.checks.find(x => x.id === 'network.web-sg').expected).toContain('該 IP 是否為自己的電腦另行確認')
   expect(report.checks.some(x => x.id.startsWith('manual.'))).toBe(false)
+})
+
+const template = require('../deploy/iam/final-check-policy.json')
+const templateActions = template.Statement.flatMap(x => [].concat(x.Action))
+function callerAws (arn, data) {
+  return jest.fn(async (service, operation, input) => {
+    expect(READS.has(`${service}/${operation}`)).toBe(true)
+    if (operation === 'get-caller-identity') return { Account: '123456789012', Arn: arn }
+    const key = input?.PolicyArn ? `${operation}:${input.PolicyArn}` : input?.PolicyName ? `${operation}:${input.PolicyName}` : operation
+    if (!(key in data) && !(operation in data)) throw Object.assign(new Error(), { code: 'AccessDenied', status: 'BLOCKED' })
+    return data[key] ?? data[operation]
+  })
+}
+const templateDoc = JSON.parse(JSON.stringify(template).replace(/YOUR_ACCOUNT_ID/g, '123456789012'))
+const managed = (arn, document) => ({
+  [`get-policy:${arn}`]: { Policy: { DefaultVersionId: 'v1' } },
+  [`get-policy-version:${arn}`]: { PolicyVersion: { Document: document } }
+})
+test('自查專用 policy 範本與程式內清單一致，且全為只讀 action', () => {
+  expect(new Set(templateActions.map(x => x.toLowerCase()))).toEqual(POLICY_ACTIONS)
+  expect(templateActions.filter(x => !x.startsWith('cloudshell:')).every(x => /^[a-z0-9]+:(Get|List|Describe|View)[A-Za-z]+$/.test(x))).toBe(true)
+  expect(templateActions.filter(x => x.startsWith('cloudshell:')).sort()).toEqual(['cloudshell:CreateEnvironment', 'cloudshell:CreateSession', 'cloudshell:GetEnvironmentStatus', 'cloudshell:GetFileUploadUrls', 'cloudshell:PutCredentials', 'cloudshell:StartEnvironment'])
+  expect(template.Statement.every(x => x.Effect === 'Allow')).toBe(true)
+  const star = template.Statement.filter(x => x.Resource === '*').flatMap(x => [].concat(x.Action))
+  expect(star.every(x => /^(ec2|sts|cloudshell):/.test(x))).toBe(true) // only actions without resource-level support stay on *
+  const scoped = template.Statement.filter(x => x.Resource !== '*')
+  expect(new Set(scoped.flatMap(x => [].concat(x.Action)).map(x => x.toLowerCase()))).toEqual(SCOPED_ACTIONS)
+  for (const x of scoped) {
+    for (const r of [].concat(x.Resource)) expect(r.includes('YOUR_ACCOUNT_ID') || r === 'arn:aws:iam::aws:policy/*' || r.startsWith('arn:aws:s3:::')).toBe(true)
+    if ([].concat(x.Resource).some(r => r.startsWith('arn:aws:s3:::'))) expect(x.Condition).toEqual({ StringEquals: { 'aws:ResourceAccount': 'YOUR_ACCOUNT_ID' } })
+  }
+})
+test('範本內 action 若給 Resource *，或 YOUR_ACCOUNT_ID 沒替換，一樣拒絕', async () => {
+  const doc = extraDoc => ({ 'list-user-policies': { PolicyNames: ['inline'] }, 'get-user-policy:inline': { PolicyDocument: extraDoc }, 'list-attached-user-policies': { AttachedPolicies: [] }, 'list-groups-for-user': { Groups: [] } })
+  const wide = callerAws('arn:aws:iam::123456789012:user/me', doc({ Statement: [{ Effect: 'Allow', Action: ['rds:DescribeDBInstances', 'ec2:DescribeInstances'], Resource: '*' }] }))
+  await expect(checkCaller(wide)).rejects.toMatchObject({ code: 'ExcessPermissions', extra: ['user me/inline: rds:DescribeDBInstances（Resource 是 *，範本要求限自己帳號）'] })
+  const raw = callerAws('arn:aws:iam::123456789012:user/me', doc(template))
+  const { extra } = await checkCaller(raw).catch(e => e)
+  expect(extra.every(x => x.includes('YOUR_ACCOUNT_ID 未替換'))).toBe(true)
+  expect(extra.some(x => x.startsWith('user me/inline: s3:GetObject'))).toBe(true) // placeholder inside Condition is caught too
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', NotResource: 'arn:aws:rds:*:*:db:x' }] } }], '123456789012')).toEqual(['p: NotResource', 'p: rds:DescribeDBInstances（Resource 缺省）'])
+})
+test('等同 * 的 ARN、別人的帳號、S3 沒有帳號條件都不算限自己帳號；範本寫法放行', () => {
+  const me = '123456789012'; const s3 = { StringEquals: { 'aws:ResourceAccount': me } }
+  const ok = [
+    { Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: `arn:aws:rds:ap-northeast-1:${me}:db:*` },
+    { Effect: 'Allow', Action: 'iam:GetPolicy', Resource: [`arn:aws:iam::${me}:*`, 'arn:aws:iam::aws:policy/*'] },
+    { Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*', Condition: s3 },
+    { Effect: 'Allow', Action: 'ec2:DescribeInstances', Resource: '*' }
+  ]
+  expect(extraActions([{ name: 'p', document: { Statement: ok } }], me)).toEqual([])
+  const bad = {
+    'arn:*': 'Resource 不是可辨識的 ARN',
+    'arn:aws:rds:*:*:db:*': 'Resource 的帳號段不是自己的帳號',
+    'arn:aws:rds:ap-northeast-1:999999999999:db:*': 'Resource 的帳號段不是自己的帳號',
+    'arn:aws:iam::*:*': 'Resource 的帳號段不是自己的帳號'
+  }
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances' }] } }], me)).toEqual(['p: rds:DescribeDBInstances（Resource 缺省）'])
+  for (const [resource, reason] of Object.entries(bad)) expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: resource }] } }], me)).toEqual([`p: rds:DescribeDBInstances（${reason}）`])
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*' }] } }], me)).toEqual(['p: s3:GetBucketLocation（S3 Resource 沒有照範本以 StringEquals aws:ResourceAccount 限自己帳號）'])
+})
+test('root 身分立即拒絕，不讀任何 policy', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:root', {})
+  await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'RootIdentity' })
+  expect(aws).toHaveBeenCalledTimes(1)
+})
+test('AdministratorAccess 或萬用 action 視為 admin 並列出', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:user/me', {
+    'list-user-policies': { PolicyNames: [] },
+    'list-attached-user-policies': { AttachedPolicies: [{ PolicyName: 'AdministratorAccess', PolicyArn: 'arn:aws:iam::aws:policy/AdministratorAccess' }] },
+    'list-groups-for-user': { Groups: [] },
+    ...managed('arn:aws:iam::aws:policy/AdministratorAccess', { Statement: [{ Effect: 'Allow', Action: '*', Resource: '*' }] })
+  })
+  await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'AdminIdentity', extra: ['user me/AdministratorAccess: *'] })
+  const star = callerAws('arn:aws:iam::123456789012:user/me', {
+    'list-user-policies': { PolicyNames: ['all'] },
+    'get-user-policy:all': { PolicyDocument: { Statement: [{ Effect: 'Allow', Action: '*:*', Resource: '*' }] } },
+    'list-attached-user-policies': { AttachedPolicies: [] },
+    'list-groups-for-user': { Groups: [] }
+  })
+  await expect(checkCaller(star)).rejects.toMatchObject({ code: 'AdminIdentity', extra: ['user me/all: *:*'] })
+})
+test('範本以外的 Allow action 拒絕並列出；Deny 與大小寫不影響', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:user/path/me', {
+    'list-user-policies': { PolicyNames: ['inline'] },
+    'get-user-policy:inline': { PolicyDocument: encodeURIComponent(JSON.stringify({ Statement: [
+      { Effect: 'Allow', Action: ['S3:GETBUCKETLOCATION', 's3:PutObject'], Resource: '*' },
+      { Effect: 'Deny', Action: 'ec2:TerminateInstances', Resource: '*' }
+    ] })) },
+    'list-attached-user-policies': { AttachedPolicies: [] },
+    'list-groups-for-user': { Groups: [] }
+  })
+  await expect(checkCaller(aws)).rejects.toMatchObject({ code: 'ExcessPermissions', extra: ['user me/inline: S3:GETBUCKETLOCATION（Resource 是 *，範本要求限自己帳號）', 'user me/inline: s3:PutObject'] })
+  expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', NotAction: 'iam:*', Resource: '*' }, { Effect: 'Allow', Action: 'ec2:Describe*', Resource: '*' }] } }], '123456789012')).toEqual(['p: NotAction', 'p: ec2:Describe*'])
+})
+test('只掛範本的 IAM User（含 group）與 Role session 可以執行', async () => {
+  const user = callerAws('arn:aws:iam::123456789012:user/livefit-checker', {
+    'list-user-policies': { PolicyNames: [] },
+    'list-attached-user-policies': { AttachedPolicies: [{ PolicyName: 'livefit-final-check', PolicyArn: 'arn:aws:iam::123456789012:policy/livefit-final-check' }] },
+    'list-groups-for-user': { Groups: [{ GroupName: 'checkers' }] },
+    'list-group-policies': { PolicyNames: ['group-inline'] },
+    'get-group-policy:group-inline': { PolicyDocument: templateDoc },
+    'list-attached-group-policies': { AttachedPolicies: [{ PolicyName: 'group-managed', PolicyArn: 'arn:aws:iam::123456789012:policy/group-managed' }] },
+    ...managed('arn:aws:iam::123456789012:policy/livefit-final-check', templateDoc),
+    ...managed('arn:aws:iam::123456789012:policy/group-managed', templateDoc)
+  })
+  const result = await checkCaller(user)
+  expect(result).toEqual({ type: 'IAM User', accountSuffix: '9012', policies: 3 })
+  expect(JSON.stringify(result)).not.toMatch(/123456789012/)
+  const role = callerAws('arn:aws:sts::123456789012:assumed-role/checker-role/session', {
+    'list-role-policies': { PolicyNames: ['inline'] },
+    'get-role-policy:inline': { PolicyDocument: templateDoc },
+    'list-attached-role-policies': { AttachedPolicies: [] }
+  })
+  await expect(checkCaller(role)).resolves.toMatchObject({ type: 'Role session', policies: 1 })
+})
+test('Console 自動附加的 IAMUserChangePassword 是唯一例外，不算多餘也不算 policy 數', async () => {
+  const aws = callerAws('arn:aws:iam::123456789012:user/livefit-checker', {
+    'list-user-policies': { PolicyNames: [] },
+    'list-attached-user-policies': { AttachedPolicies: [
+      { PolicyName: 'IAMUserChangePassword', PolicyArn: 'arn:aws:iam::aws:policy/IAMUserChangePassword' },
+      { PolicyName: 'livefit-final-check', PolicyArn: 'arn:aws:iam::123456789012:policy/livefit-final-check' }
+    ] },
+    'list-groups-for-user': { Groups: [] },
+    ...managed('arn:aws:iam::123456789012:policy/livefit-final-check', templateDoc)
+  })
+  await expect(checkCaller(aws)).resolves.toMatchObject({ policies: 1 })
+  expect(aws.mock.calls.some(([, op, input]) => op === 'get-policy' && input.PolicyArn.includes('IAMUserChangePassword'))).toBe(false)
+})
+test('身分閘門失敗時不進入資源尋找，也不呼叫網站', () => {
+  const result = require('node:child_process').spawnSync(process.execPath, [require.resolve('../scripts/check-final'), 'https://example.com'], { encoding: 'utf8', env: { ...process.env, PATH: '' } })
+  expect(result.status).toBe(2)
+  expect(result.stderr).toContain('無法確認 AWS 身分')
+  expect(result.stdout).not.toContain('正在依網站網址尋找')
+})
+test('未登入或讀不到 policy 都不放行，錯誤訊息指向專用身分', async () => {
+  await expect(checkCaller(async () => { throw Object.assign(new Error(), { code: 'CommandFailed' }) })).rejects.toThrow(/登入/)
+  await expect(checkCaller(callerAws('arn:aws:iam::123456789012:user/me', {}))).rejects.toMatchObject({ code: 'AccessDenied' })
+  await expect(checkCaller(callerAws('arn:aws:iam::123456789012:federated-user/x', {}))).rejects.toMatchObject({ code: 'UnsupportedIdentity' })
+  await expect(checkCaller(async () => ({ Arn: 'arn:aws:iam::123456789012:user/me' }))).rejects.toMatchObject({ code: 'UnknownIdentity' })
 })

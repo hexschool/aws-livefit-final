@@ -11,6 +11,7 @@
 | `iam/ec2-trust.json` | EC2 Role 的信任政策 |
 | `iam/ecr-pull-policy.json` | EC2 拉取映像的權限；替換帳號與 repository 名稱 |
 | `iam/livefit-app-policy.json` | 應用的 S3／SES 權限；替換帳號、Bucket 與寄件身分 |
+| `iam/final-check-policy.json` | 最終作業自查專用唯讀身分的權限；把 `YOUR_ACCOUNT_ID` 換成自己的帳號 ID，其餘不改（見 README 自查段） |
 | `s3-cors.json` | 將 `YOUR_DOMAIN` 換成自己的網站網域；此檔為 AWS CLI CORS 設定格式 |
 | `nginx/livefit.conf` | 替換 `YOUR_DOMAIN`，供主機 Nginx 使用，再以 Certbot 設定 HTTPS |
 

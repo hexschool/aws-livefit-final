@@ -9,7 +9,7 @@ const dns = require('node:dns').promises
 const http = require('node:http')
 const https = require('node:https')
 const exec = promisify(execFile)
-const VERSION = '1.2.1'
+const VERSION = '1.3.0'
 const LABELS = { PASS: '通過', FAIL: '需修正', BLOCKED: '無法檢查' }
 const WEEKS = ['01-account-and-cost', '02-iam', '03-vpc', '04-vpc-security', '05-ec2', '06-s3', '07-rds', '08-ses', '09-ecr', '10-container-deploy', '11-nginx-https']
 const READS = new Set([
@@ -17,12 +17,33 @@ const READS = new Set([
   'ec2/describe-images', 'ec2/describe-security-groups', 'ec2/describe-route-tables',
   'rds/describe-db-instances', 'iam/get-instance-profile',
   'iam/list-role-policies', 'iam/get-role-policy', 'iam/list-attached-role-policies', 'iam/get-policy', 'iam/get-policy-version',
+  'iam/list-user-policies', 'iam/get-user-policy', 'iam/list-attached-user-policies', 'iam/list-groups-for-user',
+  'iam/list-group-policies', 'iam/get-group-policy', 'iam/list-attached-group-policies',
   's3api/get-bucket-location', 's3api/get-public-access-block', 's3api/get-bucket-ownership-controls',
   's3api/get-bucket-policy-status', 's3api/get-bucket-versioning', 's3api/get-bucket-cors',
   's3api/list-object-versions', 's3api/head-object',
   'sesv2/get-email-identity', 'ecr/describe-images',
   'budgets/describe-budget', 'budgets/describe-budgets', 'budgets/describe-notifications-for-budget'
 ])
+// Mirrors deploy/iam/final-check-policy.json; the checker refuses any identity allowed to do more than this.
+// Least privilege: https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege
+const POLICY_ACTIONS = new Set([
+  'budgets:ViewBudget', 'ec2:DescribeAddresses', 'ec2:DescribeImages', 'ec2:DescribeInstances', 'ec2:DescribeRouteTables', 'ec2:DescribeSecurityGroups',
+  'ecr:DescribeImages', 'iam:GetGroupPolicy', 'iam:GetInstanceProfile', 'iam:GetPolicy', 'iam:GetPolicyVersion', 'iam:GetRolePolicy', 'iam:GetUserPolicy',
+  'iam:ListAttachedGroupPolicies', 'iam:ListAttachedRolePolicies', 'iam:ListAttachedUserPolicies', 'iam:ListGroupPolicies', 'iam:ListGroupsForUser',
+  'iam:ListRolePolicies', 'iam:ListUserPolicies', 'rds:DescribeDBInstances', 's3:GetBucketCORS', 's3:GetBucketLocation', 's3:GetBucketOwnershipControls',
+  's3:GetBucketPolicyStatus', 's3:GetBucketPublicAccessBlock', 's3:GetBucketVersioning', 's3:GetObject', 's3:ListBucketVersions', 'ses:GetEmailIdentity', 'sts:GetCallerIdentity',
+  // CloudShell needs these to open the student's own shell and upload the checker; they touch no course resource.
+  // https://docs.aws.amazon.com/cloudshell/latest/userguide/sec-auth-with-identities.html (CreateEnvironment only accepts Resource "*")
+  'cloudshell:CreateEnvironment', 'cloudshell:CreateSession', 'cloudshell:GetEnvironmentStatus', 'cloudshell:GetFileUploadUrls', 'cloudshell:PutCredentials', 'cloudshell:StartEnvironment'
+].map(a => a.toLowerCase()))
+// Template actions that support resource-level permissions; the student's policy must not grant them on Resource "*".
+// ec2 Describe* has no resource-level support: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-policy-structure.html#ec2-supported-iam-actions-resources
+// Resource element and when "*" is required: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_resource.html
+const SCOPED_ACTIONS = new Set([...POLICY_ACTIONS].filter(a => !/^(ec2|sts|cloudshell):/.test(a)))
+// The Console attaches this AWS managed policy when a new user must change password at first sign-in; it only allows changing one's own password.
+// https://docs.aws.amazon.com/aws-managed-policy/latest/reference/IAMUserChangePassword.html
+const IGNORED_MANAGED_POLICIES = new Set(['arn:aws:iam::aws:policy/IAMUserChangePassword'])
 function scrub (value) {
   return String(value).replace(/arn:aws[^\s"<>]*/g, '[ARN 已遮蔽]')
     .replace(/\b\d{12}\b/g, '[帳號已遮蔽]')
@@ -63,6 +84,92 @@ function makeAws (config, profile) {
       return JSON.parse(stdout)
     } catch (e) { throw commandError(e) }
   }
+}
+function policyDocument (raw) {
+  if (typeof raw !== 'string') return raw
+  try { return JSON.parse(raw) } catch { return JSON.parse(decodeURIComponent(raw)) }
+}
+// Why a scoped action's statement does not stay inside the caller's own account; undefined when it does.
+// S3 ARNs carry no account segment, so ownership is checked via aws:ResourceAccount:
+// https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html#condition-keys-resourceaccount
+function scopeProblem (statement, account) {
+  if (JSON.stringify(statement).includes('YOUR_ACCOUNT_ID')) return 'YOUR_ACCOUNT_ID 未替換成自己的帳號 ID'
+  const resources = [].concat(statement.Resource || []).map(String)
+  if (!resources.length) return 'Resource 缺省'
+  if (resources.some(r => r === '*')) return 'Resource 是 *，範本要求限自己帳號'
+  const owner = [].concat(statement.Condition?.StringEquals?.['aws:ResourceAccount'] || [])
+  for (const r of resources) {
+    const m = r.match(/^arn:aws:([a-z0-9-]+):([^:]*):([^:]*):/)
+    if (!m) return 'Resource 不是可辨識的 ARN'
+    if (m[1] === 's3') { if (!(owner.length === 1 && owner[0] === account)) return 'S3 Resource 沒有照範本以 StringEquals aws:ResourceAccount 限自己帳號' } else if (m[3] !== account && !(m[1] === 'iam' && m[3] === 'aws')) return 'Resource 的帳號段不是自己的帳號'
+  }
+}
+function extraActions (policies, account, allowed = POLICY_ACTIONS, scoped = SCOPED_ACTIONS) {
+  const extra = new Set()
+  for (const { name, document } of policies) {
+    for (const s of [].concat(document?.Statement || [])) {
+      if (s.Effect !== 'Allow') continue
+      if (s.NotAction !== undefined) extra.add(`${name}: NotAction`)
+      if (s.NotResource !== undefined) extra.add(`${name}: NotResource`)
+      let problem
+      for (const action of [].concat(s.Action || [])) {
+        if (typeof action !== 'string' || /[*?]/.test(action) || !allowed.has(action.toLowerCase())) extra.add(`${name}: ${action}`)
+        else if (scoped.has(action.toLowerCase()) && (problem ??= scopeProblem(s, account) || false)) extra.add(`${name}: ${action}（${problem}）`)
+      }
+    }
+  }
+  return [...extra].sort()
+}
+async function callerPolicies (aws, arn) {
+  const policies = []
+  const managed = async (list, name) => {
+    for (const p of (await aws('iam', list.operation, list.input)).AttachedPolicies || []) {
+      if (IGNORED_MANAGED_POLICIES.has(p.PolicyArn)) continue
+      const policy = (await aws('iam', 'get-policy', { PolicyArn: p.PolicyArn })).Policy
+      const version = (await aws('iam', 'get-policy-version', { PolicyArn: p.PolicyArn, VersionId: policy.DefaultVersionId })).PolicyVersion
+      policies.push({ name: `${name}/${p.PolicyName}`, document: policyDocument(version.Document) })
+    }
+  }
+  const inline = async (list, get, key, name) => {
+    for (const PolicyName of (await aws('iam', list.operation, list.input)).PolicyNames || []) {
+      policies.push({ name: `${name}/${PolicyName}`, document: policyDocument((await aws('iam', get, { ...list.input, PolicyName })).PolicyDocument) })
+    }
+  }
+  const user = arn.match(/:user\/(?:.*\/)?([^/]+)$/)?.[1]
+  const role = arn.match(/:assumed-role\/([^/]+)\//)?.[1]
+  if (user) {
+    await inline({ operation: 'list-user-policies', input: { UserName: user } }, 'get-user-policy', 'UserName', `user ${user}`)
+    await managed({ operation: 'list-attached-user-policies', input: { UserName: user } }, `user ${user}`)
+    for (const g of (await aws('iam', 'list-groups-for-user', { UserName: user })).Groups || []) {
+      await inline({ operation: 'list-group-policies', input: { GroupName: g.GroupName } }, 'get-group-policy', 'GroupName', `group ${g.GroupName}`)
+      await managed({ operation: 'list-attached-group-policies', input: { GroupName: g.GroupName } }, `group ${g.GroupName}`)
+    }
+    return { type: 'IAM User', policies }
+  }
+  if (role) {
+    await inline({ operation: 'list-role-policies', input: { RoleName: role } }, 'get-role-policy', 'RoleName', `role ${role}`)
+    await managed({ operation: 'list-attached-role-policies', input: { RoleName: role } }, `role ${role}`)
+    return { type: 'Role session', policies }
+  }
+  throw problem('UnsupportedIdentity', 'FAIL')
+}
+// Least privilege gate: refuse root, admin, or any identity allowed more than the final-check policy template.
+async function checkCaller (aws, allowed = POLICY_ACTIONS) {
+  let identity
+  try { identity = await aws('sts', 'get-caller-identity') } catch (e) { throw Object.assign(new Error(`無法確認 AWS 身分（${e.code}）。請先以自查專用唯讀身分登入 AWS CLI 或 CloudShell 再執行。`), { code: e.code }) }
+  if (!identity?.Arn || !/^\d{12}$/.test(String(identity.Account))) throw Object.assign(new Error('無法確認 AWS 身分。'), { code: 'UnknownIdentity' })
+  if (/:root$/.test(identity.Arn)) throw Object.assign(new Error('拒絕以 root 身分執行自查。請依 README 建立自查專用唯讀身分（deploy/iam/final-check-policy.json）並用它登入後重跑。'), { code: 'RootIdentity' })
+  let caller
+  try { caller = await callerPolicies(aws, identity.Arn) } catch (e) {
+    if (e.code === 'UnsupportedIdentity') throw Object.assign(new Error('自查只接受 IAM User 或 Role session 身分。'), { code: e.code })
+    throw Object.assign(new Error(`無法讀取目前身分的 IAM policy（${e.code}）。自查專用身分必須掛上 deploy/iam/final-check-policy.json 才能自我檢查。`), { code: e.code })
+  }
+  const extra = extraActions(caller.policies, String(identity.Account || ''), allowed)
+  if (extra.length) {
+    const admin = extra.some(x => /: \*(:\*)?$/.test(x))
+    throw Object.assign(new Error(`${admin ? '拒絕以 admin 身分執行自查。' : '拒絕執行：目前身分的權限超出自查所需。'}請建立只掛 deploy/iam/final-check-policy.json 的專用身分（Resource 依範本限自己帳號）。多餘或未收斂的 Allow：\n  ${extra.join('\n  ')}`), { code: admin ? 'AdminIdentity' : 'ExcessPermissions', extra })
+  }
+  return { type: caller.type, accountSuffix: String(identity.Account || '').slice(-4), policies: caller.policies.length }
 }
 function request (url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -283,7 +390,7 @@ function totals (report) { return Object.fromEntries(Object.keys(LABELS).map(s =
 function exitCode (report) { const t = totals(report); return t.FAIL ? 1 : t.BLOCKED ? 2 : 0 }
 function renderHtml (report) {
   const escape = s => String(s ?? '').replace(/[&<>"']/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]))
-  return `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LiveFit 最終作業自查</title><style>body{font:16px/1.7 system-ui,sans-serif;background:#f5f7fa;color:#17283a;margin:0;padding:24px}main{max-width:960px;margin:auto}h1{font-size:28px}article{background:white;border:1px solid #d7e0e9;border-left:5px solid #65758b;padding:18px;margin:16px 0;border-radius:8px;overflow-wrap:anywhere}article.PASS{border-left-color:#24804c}article.FAIL{border-left-color:#bc3535}article.BLOCKED{border-left-color:#b47700}h2{font-size:19px;margin:0}p{margin:8px 0}.meta{font-size:14px;color:#496078}.counts{display:flex;flex-wrap:wrap;gap:12px}.counts span{padding:8px 14px;background:#e4ebf2;border-radius:6px}a{color:#176087}@media print{body{padding:0;background:white}article{break-inside:avoid}}</style><main><h1>LiveFit 最終作業自查報告</h1><p>本報告只列本次實際執行的檢查。權限不足會列「無法檢查」。</p><p class="meta">時間 ${escape(report.checkedAt)} · checker ${escape(report.version)}<br>網站 ${escape(report.target.url)}<br>EC2 ${escape(report.target.instanceId)} · ${escape(report.target.region)}<br>程式 SHA-256 ${escape(report.scriptSha256 || '')}</p><div class="counts">${Object.entries(totals(report)).map(([k, v]) => `<span>${LABELS[k]} ${v}</span>`).join('')}</div>${report.checks.map(x => `<article class="${x.status}"><h2>${LABELS[x.status]} · ${escape(x.week)} ${escape(x.title)}</h2><p class="meta">${escape(x.id)}</p><p><b>預期：</b>${escape(x.expected)}</p><p><b>實際：</b>${escape(x.actual)}</p>${x.status === 'PASS' ? '' : `<p><b>下一步：</b>${escape(x.fix)}</p>`}<a href="${escape(x.lesson)}">對照講義</a></article>`).join('')}</main></html>`
+  return `<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LiveFit 最終作業自查</title><style>body{font:16px/1.7 system-ui,sans-serif;background:#f5f7fa;color:#17283a;margin:0;padding:24px}main{max-width:960px;margin:auto}h1{font-size:28px}article{background:white;border:1px solid #d7e0e9;border-left:5px solid #65758b;padding:18px;margin:16px 0;border-radius:8px;overflow-wrap:anywhere}article.PASS{border-left-color:#24804c}article.FAIL{border-left-color:#bc3535}article.BLOCKED{border-left-color:#b47700}h2{font-size:19px;margin:0}p{margin:8px 0}.meta{font-size:14px;color:#496078}.counts{display:flex;flex-wrap:wrap;gap:12px}.counts span{padding:8px 14px;background:#e4ebf2;border-radius:6px}a{color:#176087}@media print{body{padding:0;background:white}article{break-inside:avoid}}</style><main><h1>LiveFit 最終作業自查報告</h1><p>本報告只列本次實際執行的檢查。權限不足會列「無法檢查」。</p><p class="meta">時間 ${escape(report.checkedAt)} · checker ${escape(report.version)}<br>網站 ${escape(report.target.url)}<br>EC2 ${escape(report.target.instanceId)} · ${escape(report.target.region)}<br>執行身分 ${escape(report.caller?.type || '未記錄')}<br>程式 SHA-256 ${escape(report.scriptSha256 || '')}</p><div class="counts">${Object.entries(totals(report)).map(([k, v]) => `<span>${LABELS[k]} ${v}</span>`).join('')}</div>${report.checks.map(x => `<article class="${x.status}"><h2>${LABELS[x.status]} · ${escape(x.week)} ${escape(x.title)}</h2><p class="meta">${escape(x.id)}</p><p><b>預期：</b>${escape(x.expected)}</p><p><b>實際：</b>${escape(x.actual)}</p>${x.status === 'PASS' ? '' : `<p><b>下一步：</b>${escape(x.fix)}</p>`}<a href="${escape(x.lesson)}">對照講義</a></article>`).join('')}</main></html>`
 }
 function parseArgs (args) {
   const result = {}
@@ -299,15 +406,19 @@ function parseArgs (args) {
 }
 async function main () {
   const args = parseArgs(process.argv.slice(2))
-  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找東京的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2。\n選用：--profile NAME 指定登入設定、--out DIR 指定報告目錄。')
+  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找東京的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2，且登入身分只能掛 deploy/iam/final-check-policy.json（root／admin 會被拒絕）。\n選用：--profile NAME 指定登入設定、--out DIR 指定報告目錄。')
   let c; let discovery
+  if (args.url) require('./discover-final').validateUrl(args.url)
+  else c = validateConfig(JSON.parse(fs.readFileSync(args.config, 'utf8')))
+  const caller = await checkCaller(makeAws({ region: 'ap-northeast-1' }, args.profile))
+  console.log(`[身分] ${caller.type}；policy ${caller.policies} 份；無超出自查範本的權限。`)
   if (args.url) {
     console.log('正在依網站網址尋找東京的 AWS 資源；不需填 JSON。')
     const { discover, terminalChoose } = require('./discover-final')
     discovery = await discover(args.url, { profile: args.profile, choose: terminalChoose })
     c = discovery.config
     for (const issue of Object.values(discovery.issues)) console.log('待確認：' + issue)
-  } else c = validateConfig(JSON.parse(fs.readFileSync(args.config, 'utf8')))
+  }
   console.log('LiveFit 最終作業自查：只讀 AWS 設定與網站，不重啟、不寄信。')
   const hostReport = args['host-report'] ? JSON.parse(fs.readFileSync(args['host-report'], 'utf8')) : undefined
   const report = await runChecks(c, { profile: args.profile, hostReport, discoveryIssues: discovery?.issues, onResult: x => console.log(`[${LABELS[x.status]}] ${x.week} ${x.title} — ${x.actual}`) })
@@ -315,6 +426,7 @@ async function main () {
     report.discovery = { notes: discovery.notes, unresolved: discovery.issues }
     report.discoverySha256 = createHash('sha256').update(fs.readFileSync(path.join(__dirname, 'discover-final.js'))).digest('hex')
   }
+  report.caller = caller
   report.scriptSha256 = createHash('sha256').update(fs.readFileSync(__filename)).digest('hex')
   report.configSha256 = createHash('sha256').update(JSON.stringify(c)).digest('hex')
   const out = path.resolve(args.out || 'artifacts/final-check')
@@ -325,5 +437,5 @@ async function main () {
   console.log(`\n${Object.entries(totals(report)).map(([s, n]) => `${LABELS[s]} ${n}`).join(' / ')}\n報告：${out}/report.html`)
   process.exitCode = exitCode(report)
 }
-module.exports = { VERSION, READS, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
+module.exports = { VERSION, READS, POLICY_ACTIONS, SCOPED_ACTIONS, IGNORED_MANAGED_POLICIES, policyDocument, scopeProblem, extraActions, callerPolicies, checkCaller, scrub, commandError, validateConfig, makeAws, request, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs }
 if (require.main === module) main().catch(e => { console.error(scrub(e.message)); process.exitCode = 2 })

@@ -35,7 +35,13 @@ docker compose exec backend npm run db:seed
 
 ## 自查與繳交
 
-在已登入自己 AWS 的終端、repo 根目錄執行：
+自查只能用**自查專用的唯讀身分**執行。root、admin，或任何權限超出範本的身分都會在第一步被拒絕。先建立這個身分：
+
+1. IAM → Policies → Create policy → JSON，貼上 [deploy/iam/final-check-policy.json](deploy/iam/final-check-policy.json)，把所有 `YOUR_ACCOUNT_ID` 換成自己的 12 碼帳號 ID（Console 右上角帳號選單），其餘不要改，命名 `livefit-final-check`。範本只有唯讀查詢加上開啟自己 CloudShell 與上傳檔案的權限。依 AWS 文件，[EC2 的 Describe 動作不支援 resource-level 權限](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-policy-structure.html#ec2-supported-iam-actions-resources)、[CloudShell 的 CreateEnvironment 只接受 `Resource: *`](https://docs.aws.amazon.com/cloudshell/latest/userguide/sec-auth-with-identities.html)、[STS GetCallerIdentity 沒有資源型別](https://docs.aws.amazon.com/service-authorization/latest/reference/list_awssecuritytokenservice.html)，所以這三類保留 `*`；其餘都限在自己帳號（ARN 帳號段，S3 用 [`aws:ResourceAccount`](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html#condition-keys-resourceaccount) 條件），符合 [IAM 最小權限原則](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege)，自查會檢查這一點。
+2. IAM → Users → Create user，命名 `livefit-checker`，勾選 Console 存取；權限只附加 `livefit-final-check`，不加入任何 group、不附加其他 policy。Console 為「下次登入須重設密碼」自動附加的 [`IAMUserChangePassword`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/IAMUserChangePassword.html) 是唯一例外（只允許改自己的密碼），自查會略過它。
+3. 登出 Console，改用 `livefit-checker` 登入，再開 CloudShell 或設定本機 CLI profile。
+
+接著在該身分已登入的終端、repo 根目錄執行：
 
 ```sh
 npm run check:final -- https://你的網站
@@ -43,7 +49,7 @@ npm run check:final -- https://你的網站
 
 需要 Node.js 20.19+ 與 AWS CLI v2。執行自查不需 `npm install`，不需填 JSON；有多個資源候選時，依提示選擇。使用命名 profile 時可加 `--profile 你的設定名稱`。
 
-自查只讀取網站與 AWS 設定，不建立資源或寄信。它檢查 HTTPS、readiness、網路、EC2、RDS、S3、SES 寄件身分、ECR 與預算；不包含監控，也不代表所有網站功能都已實測。
+自查啟動時會讀取目前身分掛的所有 policy，只要出現範本以外的 Allow 就列出並中止；終端第一行 `[身分]` 會顯示身分類型與 policy 數量。自查只讀取網站與 AWS 設定，不建立資源或寄信。它檢查 HTTPS、readiness、網路、EC2、RDS、S3、SES 寄件身分、ECR 與預算；不包含監控，也不代表所有網站功能都已實測。
 
 完成後只提交一張終端截圖，包含：
 
@@ -69,7 +75,7 @@ cd ~/livefit-selfcheck
 node scripts/check-final.js https://你的網站
 ```
 
-之後只需重跑最後一行；更新程式時換一個壓縮檔名重新上傳，並使用相同的新檔名解壓。CloudShell 沿用 Console 身分，無須貼上 AWS key。
+之後只需重跑最後一行；更新程式時換一個壓縮檔名重新上傳，並使用相同的新檔名解壓。CloudShell 沿用 Console 身分，無須貼上 AWS key；因此 Console 必須是 `livefit-checker` 登入，用 admin 或 root 登入的 CloudShell 會被拒絕。
 
 ## 使用範圍
 

@@ -1,7 +1,7 @@
 // Discover only from the website's EC2 and its attached role; never choose the first account resource.
 const dns = require('node:dns').promises
 const net = require('node:net')
-const { makeAws, instanceGroupIds, scrub } = require('./check-final')
+const { makeAws, instanceGroupIds, scrub, policyDocument } = require('./check-final')
 const FIELDS = {
   instanceId: ['ec2.', 'network.', 'rds.private', 'iam.', 'host.'],
   dbInstanceIdentifier: ['rds.', 'network.db-sg', 'host.'],
@@ -13,10 +13,6 @@ function validateUrl (raw) {
   const u = new URL(raw)
   if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash || u.pathname !== '/' || u.port) throw new Error('請只填自己的 HTTPS 網站根網址。')
   return u.origin
-}
-function policyDocument (raw) {
-  if (typeof raw !== 'string') return raw
-  try { return JSON.parse(raw) } catch { return JSON.parse(decodeURIComponent(raw)) }
 }
 function roleResources (documents, service, region, account) {
   const values = new Set(); let broad = false
