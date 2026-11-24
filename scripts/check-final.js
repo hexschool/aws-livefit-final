@@ -61,7 +61,7 @@ function commandError (error) {
 function validateConfig (c) {
   const u = new URL(c.url)
   if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash || u.pathname !== '/' || u.port) throw new Error('url 必須是沒有帳密、路徑或 query 的 HTTPS 網站根網址。')
-  if (c.region !== 'ap-northeast-1') throw new Error('本課程使用東京 ap-northeast-1。')
+  if (c.region !== 'ap-southeast-2') throw new Error('本課程使用 Sydney ap-southeast-2。')
   if (!/^i-[a-f0-9]{8,17}$/.test(c.instanceId)) throw new Error('請填入自己的 EC2 instanceId。')
   for (const key of ['bucket', 'dbInstanceIdentifier', 'repository', 'imageTag', 'sesIdentity', 'budgetName', 'practiceKey']) {
     if (typeof c[key] !== 'string' || !c[key].trim() || /YOUR_|REPLACE|[\r\n\0]/.test(c[key]) || c[key].startsWith('-') || /^fileb?:/.test(c[key])) throw new Error(`請填入有效的 ${key}。`)
@@ -288,7 +288,7 @@ async function runChecks (c, deps = {}) {
     const has = (type, threshold) => budgetNotification(n, type, threshold)
     return { ok: b?.BudgetType === 'COST' && b.TimeUnit === 'MONTHLY' && b.BudgetLimit?.Unit === 'USD' && Number(b.BudgetLimit.Amount) === 30 && has('ACTUAL', 85) && has('ACTUAL', 100) && has('FORECASTED', 100), actual: `月期=${b?.TimeUnit}；金額=${b?.BudgetLimit?.Amount} ${b?.BudgetLimit?.Unit}；通知門檻 ${n.length} 個；未讀取帳單或收件人。` }
   })
-  await check('ec2.machine', 5, '指定 EC2 規格與狀態', '東京、running、t4g.micro、arm64', '核對 instanceId、Region、實例狀態與 ARM64 映像。', async () => {
+  await check('ec2.machine', 5, '指定 EC2 規格與狀態', 'Sydney、running、t4g.micro、arm64', '核對 instanceId、Region、實例狀態與 ARM64 映像。', async () => {
     const x = await ec2(); return { ok: x.State?.Name === 'running' && x.InstanceType === 't4g.micro' && x.Architecture === 'arm64' && x.Placement?.AvailabilityZone?.startsWith(c.region), actual: `${x.InstanceId}；${x.State?.Name}；${x.InstanceType}；${x.Architecture}；${x.Placement?.AvailabilityZone}` }
   })
   await check('ec2.ubuntu', 5, 'EC2 Ubuntu AMI', 'AMI 名稱標示 Ubuntu 24.04 ARM64', '核對 W5 使用的 Ubuntu 24.04 ARM64；AMI 名稱不能取代主機內版本查詢。', async () => {
@@ -310,8 +310,8 @@ async function runChecks (c, deps = {}) {
     const gs = await groups(ids)
     return { ok: webRulesCorrect(gs, c.sshCidr), actual: `實際 SG=${ids.join(', ')}；共 ${gs.reduce((n, x) => n + (x.IpPermissions?.length || 0), 0)} 條入站規則，包含所有附加 SG。` }
   })
-  await check('rds.settings', 7, '指定 RDS 狀態與儲存', 'available、PostgreSQL 17、db.t4g.micro、20 GiB gp3、加密、Single-AZ、備份 3 天', '回查 W7 RDS 設定；腳本不會調整規格、建立或還原資料庫。', async () => {
-    const x = await db(); return { ok: x.DBInstanceStatus === 'available' && x.Engine === 'postgres' && x.EngineVersion?.startsWith('17.') && x.DBInstanceClass === 'db.t4g.micro' && x.AllocatedStorage === 20 && x.StorageType === 'gp3' && x.StorageEncrypted === true && x.MultiAZ === false && x.BackupRetentionPeriod === 3,
+  await check('rds.settings', 7, '指定 RDS 狀態與儲存', 'available、PostgreSQL 17、db.t4g.micro、20 GiB gp3、加密、Single-AZ、備份 1 天', '回查 W7 RDS 設定；腳本不會調整規格、建立或還原資料庫。', async () => {
+    const x = await db(); return { ok: x.DBInstanceStatus === 'available' && x.Engine === 'postgres' && x.EngineVersion?.startsWith('17.') && x.DBInstanceClass === 'db.t4g.micro' && x.AllocatedStorage === 20 && x.StorageType === 'gp3' && x.StorageEncrypted === true && x.MultiAZ === false && x.BackupRetentionPeriod === 1,
       actual: `${x.DBInstanceStatus}；${x.Engine} ${x.EngineVersion}；${x.DBInstanceClass}；${x.AllocatedStorage} GiB ${x.StorageType}；encrypted=${x.StorageEncrypted}；MultiAZ=${x.MultiAZ}；備份=${x.BackupRetentionPeriod} 天` }
   })
   await check('rds.private', 7, 'RDS 私有與跨 AZ Subnet Group', 'PubliclyAccessible=false、與 EC2 同 VPC、至少兩 AZ，所有 DB 子網只有 local route', '回查實際 DB Subnet Group 的每個子網與路由；不可讓 DB 接 Public Route Table。', async () => {
@@ -338,7 +338,7 @@ async function runChecks (c, deps = {}) {
   })
   const bucketInput = async () => ({ Bucket: c.bucket, ExpectedBucketOwner: (await identity()).Account })
   for (const [id, title, operation, expected, evaluate] of [
-    ['region', 'S3 區域', 'get-bucket-location', 'Bucket 位於東京', x => [x.LocationConstraint === c.region, `Region=${x.LocationConstraint || 'us-east-1'}`]],
+    ['region', 'S3 區域', 'get-bucket-location', 'Bucket 位於 Sydney', x => [x.LocationConstraint === c.region, `Region=${x.LocationConstraint || 'us-east-1'}`]],
     ['block', 'S3 Block Public Access', 'get-public-access-block', '四個 Block Public Access 全開', x => { const b = x.PublicAccessBlockConfiguration; return [b && ['BlockPublicAcls', 'IgnorePublicAcls', 'BlockPublicPolicy', 'RestrictPublicBuckets'].every(k => b[k] === true), `四項設定=${JSON.stringify(b)}`] }],
     ['ownership', 'S3 物件擁有權', 'get-bucket-ownership-controls', 'BucketOwnerEnforced，ACL 停用', x => [x.OwnershipControls?.Rules?.some(r => r.ObjectOwnership === 'BucketOwnerEnforced') === true, `Ownership=${x.OwnershipControls?.Rules?.[0]?.ObjectOwnership}`]],
     ['version', 'S3 版本控制', 'get-bucket-versioning', 'Versioning=Enabled', x => [x.Status === 'Enabled', `Versioning=${x.Status || '未啟用'}`]],
@@ -361,7 +361,7 @@ async function runChecks (c, deps = {}) {
     const unsigned = await get(`https://s3.${c.region}.amazonaws.com/${c.bucket}/${c.practiceKey.split('/').map(encodeURIComponent).join('/')}`)
     return { ok: count >= 2 && unsigned.status === 403, actual: `HeadObject 確認存在；同 key 版本=${count}；未簽名 GET HTTP ${unsigned.status}` }
   })
-  await check('ses.identity', 8, 'SES 寄件身分', '東京的指定 Identity 已驗證並可寄送', '回查東京 SES Verified Identity；此項只讀設定，不寄測試信。', async () => {
+  await check('ses.identity', 8, 'SES 寄件身分', 'Sydney 的指定 Identity 已驗證並可寄送', '回查 Sydney SES Verified Identity；此項只讀設定，不寄測試信。', async () => {
     const x = await aws('sesv2', 'get-email-identity', { EmailIdentity: c.sesIdentity })
     return { ok: x.VerifiedForSendingStatus === true && x.VerificationStatus === 'SUCCESS', actual: `VerifiedForSendingStatus=${x.VerifiedForSendingStatus}；VerificationStatus=${x.VerificationStatus}；寄件身分已遮蔽。` }
   })
@@ -406,14 +406,14 @@ function parseArgs (args) {
 }
 async function main () {
   const args = parseArgs(process.argv.slice(2))
-  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找東京的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2，且登入身分只能掛 deploy/iam/final-check-policy.json（root／admin 會被拒絕）。\n選用：--profile NAME 指定登入設定、--out DIR 指定報告目錄。')
+  if (args.help) return console.log('npm run check:final -- https://你的網站\n自動找 Sydney 的對應 AWS 資源，有多個候選才詢問。只讀；需 Node.js 20.19+ 與已登入的 AWS CLI v2，且登入身分只能掛 deploy/iam/final-check-policy.json（root／admin 會被拒絕）。\n選用：--profile NAME 指定登入設定、--out DIR 指定報告目錄。')
   let c; let discovery
   if (args.url) require('./discover-final').validateUrl(args.url)
   else c = validateConfig(JSON.parse(fs.readFileSync(args.config, 'utf8')))
-  const caller = await checkCaller(makeAws({ region: 'ap-northeast-1' }, args.profile))
+  const caller = await checkCaller(makeAws({ region: 'ap-southeast-2' }, args.profile))
   console.log(`[身分] ${caller.type}；policy ${caller.policies} 份；無超出自查範本的權限。`)
   if (args.url) {
-    console.log('正在依網站網址尋找東京的 AWS 資源；不需填 JSON。')
+    console.log('正在依網站網址尋找 Sydney 的 AWS 資源；不需填 JSON。')
     const { discover, terminalChoose } = require('./discover-final')
     discovery = await discover(args.url, { profile: args.profile, choose: terminalChoose })
     c = discovery.config

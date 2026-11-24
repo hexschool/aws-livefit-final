@@ -1,12 +1,13 @@
 const { validateConfig, commandError, routeFor, webRulesCorrect, dbRulesCorrect, instanceGroupIds, budgetNotification, makeReporter, runChecks, totals, exitCode, renderHtml, parseArgs, scrub, READS, POLICY_ACTIONS, SCOPED_ACTIONS, extraActions, checkCaller } = require('../scripts/check-final')
 const { runFlow } = require('../.github/scripts/check-flow')
 const { discover, roleResources, validateUrl } = require('../scripts/discover-final')
-const c = { url: 'https://class.example.com', region: 'ap-northeast-1', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
+const c = { url: 'https://class.example.com', region: 'ap-southeast-2', instanceId: 'i-1234567890abcdef0', dbInstanceIdentifier: 'class-db', bucket: 'class-private-photos', practiceKey: 'practice/p.png', repository: 'class-app', imageTag: 'v1', sshCidr: '203.0.113.2/32', sesIdentity: 'student@example.com', budgetName: 'course' }
 const rule = (port, ip) => ({ IpProtocol: 'tcp', FromPort: port, ToPort: port, IpRanges: [{ CidrIp: ip }] })
 const web = [{ GroupId: 'sg-web', IpPermissions: [rule(22, c.sshCidr), rule(80, '0.0.0.0/0'), rule(443, '0.0.0.0/0')] }]
 const dbGroup = [{ IpPermissions: [{ IpProtocol: 'tcp', FromPort: 5432, ToPort: 5432, UserIdGroupPairs: [{ GroupId: 'sg-web' }] }] }]
-test('範例不能不改就驗老師機器；URL 不接受秘密或非東京', () => {
-  expect(validateConfig(c).url).toBe(c.url)
+test('課程設定接受 Sydney，拒絕其他區域、範例佔位值與含帳密或查詢參數的網址', () => {
+  expect(validateConfig(c)).toMatchObject({ url: c.url, region: 'ap-southeast-2' })
+  expect(() => validateConfig({ ...c, region: 'ap-northeast-1' })).toThrow('本課程使用 Sydney ap-southeast-2。')
   for (const override of [{ instanceId: 'i-REPLACE_ME' }, { url: 'https://user:secret@example.com' }, { url: 'https://example.com?token=x' }, { region: 'us-east-1' }, { sshCidr: '0.0.0.0/0' }, { bucket: 'file:///tmp/key' }]) expect(() => validateConfig({ ...c, ...override })).toThrow()
 })
 test('CLI 參數必須完整；不接受未知選項', () => {
@@ -147,8 +148,8 @@ const account = '123456789012'
 const policy = { Statement: [
   { Effect: 'Allow', Action: 'ecr:GetAuthorizationToken', Resource: '*' },
   { Effect: 'Allow', Action: ['s3:ListBucket', 's3:GetObject'], Resource: ['arn:aws:s3:::class-private-photos', 'arn:aws:s3:::class-private-photos/coaches/*'] },
-  { Effect: 'Allow', Action: 'ecr:BatchGetImage', Resource: `arn:aws:ecr:ap-northeast-1:${account}:repository/class-app` },
-  { Effect: 'Allow', Action: 'ses:SendEmail', Resource: `arn:aws:ses:ap-northeast-1:${account}:identity/student@example.com` }
+  { Effect: 'Allow', Action: 'ecr:BatchGetImage', Resource: `arn:aws:ecr:ap-southeast-2:${account}:repository/class-app` },
+  { Effect: 'Allow', Action: 'ses:SendEmail', Resource: `arn:aws:ses:ap-southeast-2:${account}:identity/student@example.com` }
 ] }
 function discoveryAws (overrides = {}) {
   const data = {
@@ -270,7 +271,7 @@ test('範本內 action 若給 Resource *，或 YOUR_ACCOUNT_ID 沒替換，一�
 test('等同 * 的 ARN、別人的帳號、S3 沒有帳號條件都不算限自己帳號；範本寫法放行', () => {
   const me = '123456789012'; const s3 = { StringEquals: { 'aws:ResourceAccount': me } }
   const ok = [
-    { Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: `arn:aws:rds:ap-northeast-1:${me}:db:*` },
+    { Effect: 'Allow', Action: 'rds:DescribeDBInstances', Resource: `arn:aws:rds:ap-southeast-2:${me}:db:*` },
     { Effect: 'Allow', Action: 'iam:GetPolicy', Resource: [`arn:aws:iam::${me}:*`, 'arn:aws:iam::aws:policy/*'] },
     { Effect: 'Allow', Action: 's3:GetBucketLocation', Resource: 'arn:aws:s3:::*', Condition: s3 },
     { Effect: 'Allow', Action: 'ec2:DescribeInstances', Resource: '*' }
@@ -279,7 +280,7 @@ test('等同 * 的 ARN、別人的帳號、S3 沒有帳號條件都不算限自�
   const bad = {
     'arn:*': 'Resource 不是可辨識的 ARN',
     'arn:aws:rds:*:*:db:*': 'Resource 的帳號段不是自己的帳號',
-    'arn:aws:rds:ap-northeast-1:999999999999:db:*': 'Resource 的帳號段不是自己的帳號',
+    'arn:aws:rds:ap-southeast-2:999999999999:db:*': 'Resource 的帳號段不是自己的帳號',
     'arn:aws:iam::*:*': 'Resource 的帳號段不是自己的帳號'
   }
   expect(extraActions([{ name: 'p', document: { Statement: [{ Effect: 'Allow', Action: 'rds:DescribeDBInstances' }] } }], me)).toEqual(['p: rds:DescribeDBInstances（Resource 缺省）'])

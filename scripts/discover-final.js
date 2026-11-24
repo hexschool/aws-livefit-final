@@ -36,7 +36,7 @@ function roleResources (documents, service, region, account) {
   return [...values].sort()
 }
 async function discover (raw, deps = {}) {
-  const c = { url: validateUrl(raw), region: 'ap-northeast-1', discoveryMode: true }
+  const c = { url: validateUrl(raw), region: 'ap-southeast-2', discoveryMode: true }
   const aws = deps.aws || makeAws(c, deps.profile)
   const issues = {}; const notes = []
   const choose = deps.choose || (async () => undefined)
