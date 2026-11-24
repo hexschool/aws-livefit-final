@@ -310,8 +310,8 @@ async function runChecks (c, deps = {}) {
     const gs = await groups(ids)
     return { ok: webRulesCorrect(gs, c.sshCidr), actual: `實際 SG=${ids.join(', ')}；共 ${gs.reduce((n, x) => n + (x.IpPermissions?.length || 0), 0)} 條入站規則，包含所有附加 SG。` }
   })
-  await check('rds.settings', 7, '指定 RDS 狀態與儲存', 'available、PostgreSQL 17、db.t4g.micro、20 GiB gp3、加密、Single-AZ、備份 3 天', '回查 W7 RDS 設定；腳本不會調整規格、建立或還原資料庫。', async () => {
-    const x = await db(); return { ok: x.DBInstanceStatus === 'available' && x.Engine === 'postgres' && x.EngineVersion?.startsWith('17.') && x.DBInstanceClass === 'db.t4g.micro' && x.AllocatedStorage === 20 && x.StorageType === 'gp3' && x.StorageEncrypted === true && x.MultiAZ === false && x.BackupRetentionPeriod === 3,
+  await check('rds.settings', 7, '指定 RDS 狀態與儲存', 'available、PostgreSQL 17、db.t4g.micro、20 GiB gp3、加密、Single-AZ、備份 1 天', '回查 W7 RDS 設定；腳本不會調整規格、建立或還原資料庫。', async () => {
+    const x = await db(); return { ok: x.DBInstanceStatus === 'available' && x.Engine === 'postgres' && x.EngineVersion?.startsWith('17.') && x.DBInstanceClass === 'db.t4g.micro' && x.AllocatedStorage === 20 && x.StorageType === 'gp3' && x.StorageEncrypted === true && x.MultiAZ === false && x.BackupRetentionPeriod === 1,
       actual: `${x.DBInstanceStatus}；${x.Engine} ${x.EngineVersion}；${x.DBInstanceClass}；${x.AllocatedStorage} GiB ${x.StorageType}；encrypted=${x.StorageEncrypted}；MultiAZ=${x.MultiAZ}；備份=${x.BackupRetentionPeriod} 天` }
   })
   await check('rds.private', 7, 'RDS 私有與跨 AZ Subnet Group', 'PubliclyAccessible=false、與 EC2 同 VPC、至少兩 AZ，所有 DB 子網只有 local route', '回查實際 DB Subnet Group 的每個子網與路由；不可讓 DB 接 Public Route Table。', async () => {
